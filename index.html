@@ -9,7 +9,7 @@
             margin: 0;
             padding: 0;
             overflow: hidden;
-            background: linear-gradient(to bottom, #6B9DBE 0%, #8CB8D9 100%); /* 空のグラデーション（暗め） */
+            background: linear-gradient(to bottom, #FFB6C1 0%, #FFC0CB 100%); /* ピンク色のグラデーション */
             font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
             touch-action: none;
             user-select: none;
@@ -130,7 +130,7 @@
         <!-- スタート画面 -->
         <div id="start-screen" class="message-box" style="display: block;">
             <h1>🏠 お家へ帰ろう</h1>
-            <p style="font-size: 16px; color: #FF6B6B; font-weight: bold; margin-bottom: 10px;">v2.1 📱スマホ対応！</p>
+            <p style="font-size: 16px; color: #FF6B6B; font-weight: bold; margin-bottom: 10px;">v2.2 📱Safari対応強化！</p>
             <p>ちょっと難しくなったよ！<br>動く床や、壊れる床に気をつけて！</p>
             <p style="font-size: 12px;">音が出ます 🔊</p>
             <button id="start-btn">スタート！</button>
@@ -179,33 +179,40 @@
             document.getElementById('volume-btn').innerText = isMuted ? '🔇' : '🔊';
         }
 
-        // ボタンイベントハンドラー（オンライン化）
+        // ボタンイベントハンドラー（Safari対応強化版）
         function attachButtonHandlers() {
             const startBtn = document.getElementById('start-btn');
             const retryBtn = document.getElementById('retry-btn');
             const againBtn = document.getElementById('again-btn');
             
-            if (startBtn) {
-                startBtn.addEventListener('click', function(e) {
+            function addClickHandler(btn, handler) {
+                if (!btn) return;
+                
+                // タッチイベント（優先）
+                btn.addEventListener('touchstart', function(e) {
                     e.preventDefault();
                     e.stopPropagation();
-                    startGame();
+                    handler();
                 }, { passive: false });
-            }
-            if (retryBtn) {
-                retryBtn.addEventListener('click', function(e) {
+                
+                // クリックイベント（フォールバック）
+                btn.addEventListener('click', function(e) {
                     e.preventDefault();
                     e.stopPropagation();
-                    resetGame();
+                    handler();
                 }, { passive: false });
-            }
-            if (againBtn) {
-                againBtn.addEventListener('click', function(e) {
+                
+                // さらにmousedownも追加
+                btn.addEventListener('mousedown', function(e) {
                     e.preventDefault();
                     e.stopPropagation();
-                    resetGame();
+                    handler();
                 }, { passive: false });
             }
+            
+            addClickHandler(startBtn, startGame);
+            addClickHandler(retryBtn, resetGame);
+            addClickHandler(againBtn, resetGame);
         }
 
         const sounds = {
@@ -538,10 +545,10 @@
         }
 
         function draw() {
-            // 背景クリア & グラデーション（暗め）
+            // 背景クリア & グラデーション（ピンク色）
             const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            grad.addColorStop(0, '#6B9DBE');
-            grad.addColorStop(1, '#8CB8D9');
+            grad.addColorStop(0, '#FFB6C1');
+            grad.addColorStop(1, '#FFC0CB');
             ctx.fillStyle = grad;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -754,13 +761,19 @@
             }
         }
 
-        // ページロード時にボタンハンドラーを設定
-        window.addEventListener('DOMContentLoaded', attachButtonHandlers);
+        // ページロード時にボタンハンドラーを設定（Safari対応）
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', attachButtonHandlers);
+            document.addEventListener('DOMContentLoaded', function() {
+                setTimeout(attachButtonHandlers, 100);
+            });
         } else {
-            attachButtonHandlers();
+            setTimeout(attachButtonHandlers, 100);
         }
+        
+        // さらに確実性を高めるため、loadイベントでも実行
+        window.addEventListener('load', function() {
+            setTimeout(attachButtonHandlers, 100);
+        });
 
     </script>
 </body>
