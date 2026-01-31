@@ -179,6 +179,9 @@
             });
             const [crossyLevel, setCrossyLevel] = useState(1);
             const [score, setScore] = useState(0);
+            const [totalScore, setTotalScore] = useState(0);
+            const [isNewHighScore, setIsNewHighScore] = useState(false);
+            const [highScoreMessage, setHighScoreMessage] = useState('');
             const gameLoopRef = useRef(null);
             const autoNextTimerRef = useRef(null);
             const gameDataRef = useRef({
@@ -472,6 +475,56 @@
                         gain.connect(audioCtx.destination);
                         osc.start();
                         osc.stop(audioCtx.currentTime + 0.2);
+                    } else if (type === 'dog_bark') {
+                        // 犬: ワン
+                        osc.type = 'sawtooth';
+                        osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+                        osc.frequency.exponentialRampToValueAtTime(200, audioCtx.currentTime + 0.15);
+                        gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.start();
+                        osc.stop(audioCtx.currentTime + 0.15);
+                    } else if (type === 'human_shout') {
+                        // 人間: おりゃ〜
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(250, audioCtx.currentTime);
+                        osc.frequency.linearRampToValueAtTime(400, audioCtx.currentTime + 0.1);
+                        osc.frequency.linearRampToValueAtTime(200, audioCtx.currentTime + 0.25);
+                        gain.gain.setValueAtTime(0.35, audioCtx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.start();
+                        osc.stop(audioCtx.currentTime + 0.25);
+                    } else if (type === 'bird_crow') {
+                        // 鳥: コケコッコー
+                        osc.type = 'square';
+                        osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+                        osc.frequency.setValueAtTime(800, audioCtx.currentTime + 0.08);
+                        osc.frequency.setValueAtTime(600, audioCtx.currentTime + 0.16);
+                        osc.frequency.setValueAtTime(900, audioCtx.currentTime + 0.24);
+                        osc.frequency.linearRampToValueAtTime(400, audioCtx.currentTime + 0.4);
+                        gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.start();
+                        osc.stop(audioCtx.currentTime + 0.4);
+                    }
+                };
+
+                // キャラクター別のジャンプ音を鳴らす
+                const playJumpVoice = (charType) => {
+                    if (charType === 'dog') {
+                        playSound('dog_bark');
+                    } else if (charType === 'human') {
+                        playSound('human_shout');
+                    } else if (charType === 'bird') {
+                        playSound('bird_crow');
+                    } else {
+                        playSound('jump');
                     }
                 };
 
@@ -528,7 +581,7 @@
                             const levelBonus = crossyLevel * 10;
                             const newTotalScore = totalScore + crossy.score + levelBonus;
                             setTotalScore(newTotalScore);
-                            
+
                             // ハイスコア判定
                             const currentHighScore = highScores.crossy.score;
                             if (newTotalScore > currentHighScore) {
@@ -536,7 +589,7 @@
                                 setHighScoreMessage(getRandomHighScoreComment());
                                 updatePlayerScore('crossy', newTotalScore);
                             }
-                            
+
                             // クリア時は自動的に次の面へ遷移
                             if (autoNextTimerRef.current) {
                                 clearTimeout(autoNextTimerRef.current);
@@ -581,12 +634,12 @@
                             ctx.lineTo(car.x + car.w * 0.2, car.y + car.h);
                             ctx.closePath();
                             ctx.fill();
-                            
+
                             // ウィンドウ
                             ctx.fillStyle = '#333';
                             ctx.fillRect(car.x + car.w * 0.3, car.y + 3, car.w * 0.2, car.h - 6);
                             ctx.fillRect(car.x + car.w * 0.6, car.y + 3, car.w * 0.15, car.h - 6);
-                            
+
                             // Tロゴ
                             ctx.fillStyle = '#FFF';
                             ctx.font = 'bold 10px Arial';
@@ -855,7 +908,7 @@
                                 data.player.vy = jumpForce;
                                 data.superJumpActive = false;
                                 data.player.state = 'jumping';
-                                playSound('jump');
+                                playJumpVoice(characterType);
 
                                 if (p.type === 'goal') {
                                     data.player.state = 'celebrating';
@@ -977,7 +1030,7 @@
                     const drawPlayer = (x, y, state, animFrame, charType) => {
                         const centerX = x + data.player.width / 2;
                         const screenY = y;
-                        
+
                         if (charType === 'human') {
                             // 人間キャラクター
                             if (state === 'celebrating') {
@@ -1180,7 +1233,7 @@
                             ctx.fillRect(x + 20, screenY + 28, 3, 6);
                         }
                     };
-                    
+
                     const playerScreenY = data.player.y - data.camera.y;
                     data.player.animFrame = (data.player.animFrame + 0.2) % 360;
                     drawPlayer(data.player.x, playerScreenY, data.player.state, data.player.animFrame, characterType);
@@ -1414,8 +1467,8 @@
                     {gameState === 'playing' && (
                         <>
                             <div className="score">
-                                {gameMode === 'pyoko' 
-                                    ? `スコア: ${score}` 
+                                {gameMode === 'pyoko'
+                                    ? `スコア: ${score}`
                                     : `スコア: ${score} / 面: ${crossyLevel} / 合計: ${totalScore + score}`}
                             </div>
                             <div className="high-score">
@@ -1641,28 +1694,30 @@
                                 ) : (
                                     <p>まだランキングがありません。</p>
                                 )}
-                                <button
-                                    className="btn"
-                                    onTouchEnd={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        handleRetry(e);
-                                    }}
-                                    onClick={handleRetry}
-                                >
-                                    もう一回！
-                                </button>
-                                <button
-                                    className="btn secondary"
-                                    onTouchEnd={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        handleBackToMenu(e);
-                                    }}
-                                    onClick={handleBackToMenu}
-                                >
-                                    ゲーム選択へ
-                                </button>
+                                <div className="menu-buttons">
+                                    <button
+                                        className="btn"
+                                        onTouchEnd={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            handleRetry(e);
+                                        }}
+                                        onClick={handleRetry}
+                                    >
+                                        もう一回！
+                                    </button>
+                                    <button
+                                        className="btn secondary"
+                                        onTouchEnd={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            handleBackToMenu(e);
+                                        }}
+                                        onClick={handleBackToMenu}
+                                    >
+                                        ゲーム選択へ
+                                    </button>
+                                </div>
                             </div>
                         )}
 
