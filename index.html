@@ -191,6 +191,7 @@
                 missiles: [],
                 audioCtx: null,
                 superJumpActive: false,
+                scoreBonus: 0,
                 crossy: {
                     player: { x: 0, y: 0, size: 24 },
                     cars: [],
@@ -299,6 +300,7 @@
                     data.player.vy = 0;
                     data.camera.y = 0;
                     data.maxScore = 0;
+                    data.scoreBonus = 0;
 
                     // 音の準備（実際の再開はユーザー操作時に行う）
                     if (!data.audioCtx) {
@@ -371,6 +373,7 @@
                     crossy.trees = [];
                     crossy.score = 0;
                     const laneHeight = crossy.laneHeight;
+                    crossy.laneCount = Math.max(10, Math.floor(canvas.height / laneHeight) - 1);
                     for (let i = 0; i < crossy.laneCount; i++) {
                         const y = canvas.height - (i + 2) * laneHeight;
                         const dir = i % 2 === 0 ? 1 : -1;
@@ -615,8 +618,26 @@
                                 missile.y < poop.y + 15
                             ) {
                                 playSound('hit');
+                                data.scoreBonus += 100;
                                 data.missiles.splice(mIndex, 1);
                                 data.poops.splice(pIndex, 1);
+                            }
+                        });
+                    });
+
+                    // ミサイルと鳥の衝突判定
+                    data.missiles.forEach((missile, mIndex) => {
+                        data.birds.forEach((bird, bIndex) => {
+                            if (
+                                missile.x > bird.x - 10 &&
+                                missile.x < bird.x + bird.size + 10 &&
+                                missile.y > bird.y - 10 &&
+                                missile.y < bird.y + bird.size + 10
+                            ) {
+                                playSound('hit');
+                                data.scoreBonus += 100;
+                                data.missiles.splice(mIndex, 1);
+                                data.birds.splice(bIndex, 1);
                             }
                         });
                     });
@@ -659,10 +680,10 @@
                                 data.player.y + data.player.height < p.y + p.h + 10
                             ) {
                                 data.player.y = p.y - data.player.height;
-                                // スーパージャンプの判定（2/3を超えたら）
-                                const jumpForce = data.superJumpActive ? JUMP_FORCE * 1.8 : JUMP_FORCE;
+                                // 2/3を超えたらジャンプ力1.5倍
+                                const jumpForce = enableSuperJump ? JUMP_FORCE * 1.5 : JUMP_FORCE;
                                 data.player.vy = jumpForce;
-                                data.superJumpActive = false; // 1回限りなので解除
+                                data.superJumpActive = false;
                                 playSound('jump');
 
                                 if (p.type === 'goal') {
@@ -678,17 +699,18 @@
                         data.camera.y = targetCamY;
                     }
 
-                    // スコア
-                    const currentHeight = Math.floor((canvas.height - data.player.y) / 10);
+                    // スコア（1m=1点）
+                    const currentHeight = Math.max(0, Math.floor(canvas.height - data.player.y));
                     if (currentHeight > data.maxScore) {
                         data.maxScore = currentHeight;
-                        setScore(currentHeight);
-                        updatePlayerScore('pyoko', currentHeight);
                     }
+                    const totalScore = data.maxScore + data.scoreBonus;
+                    setScore(totalScore);
+                    updatePlayerScore('pyoko', totalScore);
 
                     // 1/3を超えたらミサイル機能有効
                     const enableMissile = currentHeight > GOAL_HEIGHT / 3;
-                    // 2/3を超えたらスーパージャンプモード有効
+                    // 2/3を超えたらジャンプ力1.5倍
                     const enableSuperJump = currentHeight > GOAL_HEIGHT * 2 / 3;
 
                     // ゲームオーバー
@@ -1002,7 +1024,7 @@
                     {gameState === 'playing' && (
                         <>
                             <div className="score">
-                                {gameMode === 'pyoko' ? `高さ: ${score}m` : `スコア: ${score} / 面: ${crossyLevel}`}
+                                {gameMode === 'pyoko' ? `スコア: ${score}` : `スコア: ${score} / 面: ${crossyLevel}`}
                             </div>
                             <div className="high-score">
                                 {gameMode === 'pyoko'
