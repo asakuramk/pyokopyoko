@@ -194,6 +194,7 @@
                 crossy: {
                     player: { x: 0, y: 0, size: 24 },
                     cars: [],
+                    trees: [],
                     laneHeight: 50,
                     laneCount: 8,
                     score: 0,
@@ -367,13 +368,14 @@
                     crossy.player.x = canvas.width / 2 - crossy.player.size / 2;
                     crossy.player.y = canvas.height - 60;
                     crossy.cars = [];
+                    crossy.trees = [];
                     crossy.score = 0;
                     const laneHeight = crossy.laneHeight;
                     for (let i = 0; i < crossy.laneCount; i++) {
                         const y = canvas.height - (i + 2) * laneHeight;
                         const dir = i % 2 === 0 ? 1 : -1;
                         const speed = (2 + i * 0.2 + Math.random()) * crossy.speedMultiplier;
-                        const carCount = 2 + (i % 2);
+                        const carCount = 1 + (i % 2);
                         for (let c = 0; c < carCount; c++) {
                             crossy.cars.push({
                                 x: Math.random() * canvas.width,
@@ -383,6 +385,16 @@
                                 vx: dir * speed
                             });
                         }
+                    }
+
+                    // 木（障害物）を追加
+                    const treeCount = 12;
+                    for (let t = 0; t < treeCount; t++) {
+                        crossy.trees.push({
+                            x: Math.random() * (canvas.width - 30) + 5,
+                            y: canvas.height - 120 - Math.random() * (crossy.laneCount * laneHeight - 40),
+                            size: 22
+                        });
                     }
                 };
 
@@ -447,13 +459,26 @@
                             if (car.vx < 0 && car.x < -60) car.x = canvas.width + 60;
                         });
 
-                        // 衝突判定
+                        // 衝突判定（車）
                         crossy.cars.forEach(car => {
                             if (
                                 crossy.player.x + crossy.player.size > car.x &&
                                 crossy.player.x < car.x + car.w &&
                                 crossy.player.y + crossy.player.size > car.y &&
                                 crossy.player.y < car.y + car.h
+                            ) {
+                                playSound('hit');
+                                setGameState('gameover');
+                            }
+                        });
+
+                        // 衝突判定（木）
+                        crossy.trees.forEach(tree => {
+                            if (
+                                crossy.player.x + crossy.player.size > tree.x &&
+                                crossy.player.x < tree.x + tree.size &&
+                                crossy.player.y + crossy.player.size > tree.y &&
+                                crossy.player.y < tree.y + tree.size
                             ) {
                                 playSound('hit');
                                 setGameState('gameover');
@@ -473,8 +498,8 @@
                             setGameState('win');
                         }
 
-                        // 描画
-                        ctx.fillStyle = '#87CEEB';
+                        // 描画（青い部分を消して地面ベース）
+                        ctx.fillStyle = '#A5D6A7';
                         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
                         // 道と草
@@ -494,12 +519,28 @@
                             ctx.fillRect(car.x + car.w - 13, car.y + 4, 8, 6);
                         });
 
-                        // プレイヤー描画
-                        ctx.fillStyle = '#FFD93D';
-                        ctx.fillRect(crossy.player.x, crossy.player.y, crossy.player.size, crossy.player.size);
+                        // 木描画
+                        crossy.trees.forEach(tree => {
+                            ctx.fillStyle = '#6D4C41';
+                            ctx.fillRect(tree.x + tree.size / 2 - 3, tree.y + tree.size / 2, 6, 10);
+                            ctx.fillStyle = '#2E7D32';
+                            ctx.beginPath();
+                            ctx.arc(tree.x + tree.size / 2, tree.y + tree.size / 2, tree.size / 2, 0, Math.PI * 2);
+                            ctx.fill();
+                        });
+
+                        // プレイヤー描画（亀）
+                        ctx.fillStyle = '#2E7D32';
+                        ctx.beginPath();
+                        ctx.arc(crossy.player.x + crossy.player.size / 2, crossy.player.y + crossy.player.size / 2, crossy.player.size / 2, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.fillStyle = '#A1887F';
+                        ctx.beginPath();
+                        ctx.arc(crossy.player.x + crossy.player.size / 2, crossy.player.y + crossy.player.size / 2, crossy.player.size / 3, 0, Math.PI * 2);
+                        ctx.fill();
                         ctx.fillStyle = '#333';
-                        ctx.fillRect(crossy.player.x + 6, crossy.player.y + 6, 4, 4);
-                        ctx.fillRect(crossy.player.x + crossy.player.size - 10, crossy.player.y + 6, 4, 4);
+                        ctx.fillRect(crossy.player.x + 6, crossy.player.y + 6, 3, 3);
+                        ctx.fillRect(crossy.player.x + crossy.player.size - 9, crossy.player.y + 6, 3, 3);
 
                         gameLoopRef.current = requestAnimationFrame(gameLoop);
                         return;
