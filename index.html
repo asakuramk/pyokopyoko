@@ -15,7 +15,7 @@
         }
         body {
             overflow: hidden;
-            background: #87CEEB;
+            background: #A5D6A7;
             font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
             touch-action: none;
             user-select: none;
@@ -169,6 +169,7 @@
             const canvasRef = useRef(null);
             const [gameState, setGameState] = useState('name');
             const [gameMode, setGameMode] = useState('pyoko');
+            const [characterType, setCharacterType] = useState('human'); // キャラクタータイプ追加
             const [playerName, setPlayerName] = useState('');
             const [nameInput, setNameInput] = useState('');
             const [players, setPlayers] = useState([]);
@@ -179,8 +180,9 @@
             const [crossyLevel, setCrossyLevel] = useState(1);
             const [score, setScore] = useState(0);
             const gameLoopRef = useRef(null);
+            const autoNextTimerRef = useRef(null);
             const gameDataRef = useRef({
-                player: { x: 0, y: 0, vx: 0, vy: 0, width: 34, height: 34 },
+                player: { x: 0, y: 0, vx: 0, vy: 0, width: 34, height: 34, state: 'jumping', animFrame: 0 },
                 platforms: [],
                 camera: { y: 0 },
                 keys: { left: false, right: false },
@@ -208,6 +210,29 @@
             const JUMP_FORCE = -11.5;
             const MOVE_SPEED = 5.5;
             const GOAL_HEIGHT = 6000;
+
+            // ハイスコア達成時のランダム絶賛コメント
+            const highScoreComments = [
+                '🎊 すごすぎる！あなたは天才だ！',
+                '🌟 伝説の記録だ！神プレイヤー認定！',
+                '🔥 圧倒的！誰も止められない！',
+                '💎 ダイヤモンド級のプレイだ！',
+                '🚀 宇宙最強レベル！NASA も注目！',
+                '👑 王者降臨！ひれ伏せ皆の者！',
+                '⚡ 電撃的な新記録！稲妻のごとし！',
+                '🎯 完璧すぎる！100点満点！',
+                '🏆 世界が震えた！歴史的瞬間！',
+                '✨ キラキラ輝く新記録！眩しい！',
+                '🦸 ヒーロー誕生！救世主現る！',
+                '🎪 サーカスも驚く神業プレイ！',
+                '🌈 奇跡が起きた！伝説の幕開け！',
+                '💫 スーパースター爆誕！ファン急増中！',
+                '🎭 マエストロ！芸術的なプレイ！'
+            ];
+
+            const getRandomHighScoreComment = () => {
+                return highScoreComments[Math.floor(Math.random() * highScoreComments.length)];
+            };
 
             const computeHighScores = (list) => {
                 const bestPyoko = list.reduce((acc, p) => {
@@ -298,6 +323,8 @@
                     data.player.y = canvas.height - 150;
                     data.player.vx = 0;
                     data.player.vy = 0;
+                    data.player.state = 'jumping';
+                    data.player.animFrame = 0;
                     data.camera.y = 0;
                     data.maxScore = 0;
                     data.scoreBonus = 0;
@@ -373,7 +400,7 @@
                     crossy.trees = [];
                     crossy.score = 0;
                     const laneHeight = crossy.laneHeight;
-                    crossy.laneCount = Math.max(10, Math.floor(canvas.height / laneHeight) - 1);
+                    crossy.laneCount = Math.floor(canvas.height / laneHeight);
                     for (let i = 0; i < crossy.laneCount; i++) {
                         const y = canvas.height - (i + 2) * laneHeight;
                         const dir = i % 2 === 0 ? 1 : -1;
@@ -493,33 +520,78 @@
                         if (currentCrossyScore > crossy.score) {
                             crossy.score = currentCrossyScore;
                             setScore(currentCrossyScore);
-                            updatePlayerScore('crossy', currentCrossyScore);
                         }
 
-                        // ゴール
-                        if (crossy.player.y < 20) {
+                        // ゴール（画面上端に到達）
+                        if (crossy.player.y <= 0) {
+                            // クリア時のスコア計算（面クリアボーナス追加）
+                            const levelBonus = crossyLevel * 10;
+                            const newTotalScore = totalScore + crossy.score + levelBonus;
+                            setTotalScore(newTotalScore);
+                            
+                            // ハイスコア判定
+                            const currentHighScore = highScores.crossy.score;
+                            if (newTotalScore > currentHighScore) {
+                                setIsNewHighScore(true);
+                                setHighScoreMessage(getRandomHighScoreComment());
+                                updatePlayerScore('crossy', newTotalScore);
+                            }
+                            
+                            // クリア時は自動的に次の面へ遷移
+                            if (autoNextTimerRef.current) {
+                                clearTimeout(autoNextTimerRef.current);
+                            }
+                            autoNextTimerRef.current = setTimeout(() => {
+                                const data = gameDataRef.current;
+                                data.crossy.level += 1;
+                                data.crossy.speedMultiplier *= 1.2;
+                                data.crossy.score = 0;
+                                setCrossyLevel(data.crossy.level);
+                                setScore(0);
+                                setIsNewHighScore(false);
+                                setGameState('playing');
+                            }, 2500);
                             setGameState('win');
                         }
 
-                        // 描画（青い部分を消して地面ベース）
-                        ctx.fillStyle = '#A5D6A7';
+// 描画（画面全体を道路で覆う - 水色を完全に除去）
+                        const laneHeight = crossy.laneHeight;
+
+                        // まず画面全体を道路の色で塗りつぶす
+                        ctx.fillStyle = '#616161';
                         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                        // 道と草
-                        const laneHeight = crossy.laneHeight;
-                        for (let i = 0; i < crossy.laneCount + 2; i++) {
-                            const y = canvas.height - (i + 1) * laneHeight;
-                            ctx.fillStyle = i % 2 === 0 ? '#9CCC65' : '#616161';
+                        // 道と草のストライプパターンを上から下まで完全に描画
+                        for (let y = -laneHeight; y < canvas.height + laneHeight * 2; y += laneHeight) {
+                            const laneIndex = Math.floor((y + laneHeight) / laneHeight);
+                            ctx.fillStyle = laneIndex % 2 === 0 ? '#616161' : '#9CCC65';
                             ctx.fillRect(0, y, canvas.width, laneHeight);
                         }
 
-                        // 車描画
+                        // 車描画（テスラ風のデザイン）
                         crossy.cars.forEach(car => {
-                            ctx.fillStyle = '#FF7043';
-                            ctx.fillRect(car.x, car.y, car.w, car.h);
-                            ctx.fillStyle = '#212121';
-                            ctx.fillRect(car.x + 5, car.y + 4, 8, 6);
-                            ctx.fillRect(car.x + car.w - 13, car.y + 4, 8, 6);
+                            // ボディ（流線型）
+                            ctx.fillStyle = car.vx > 0 ? '#E82127' : '#1E88E5'; // 赤または青
+                            ctx.beginPath();
+                            ctx.moveTo(car.x, car.y + car.h / 2);
+                            ctx.lineTo(car.x + car.w * 0.2, car.y);
+                            ctx.lineTo(car.x + car.w * 0.8, car.y);
+                            ctx.lineTo(car.x + car.w, car.y + car.h / 2);
+                            ctx.lineTo(car.x + car.w * 0.8, car.y + car.h);
+                            ctx.lineTo(car.x + car.w * 0.2, car.y + car.h);
+                            ctx.closePath();
+                            ctx.fill();
+                            
+                            // ウィンドウ
+                            ctx.fillStyle = '#333';
+                            ctx.fillRect(car.x + car.w * 0.3, car.y + 3, car.w * 0.2, car.h - 6);
+                            ctx.fillRect(car.x + car.w * 0.6, car.y + 3, car.w * 0.15, car.h - 6);
+                            
+                            // Tロゴ
+                            ctx.fillStyle = '#FFF';
+                            ctx.font = 'bold 10px Arial';
+                            ctx.textAlign = 'center';
+                            ctx.fillText('T', car.x + car.w / 2, car.y + car.h / 2 + 3);
                         });
 
                         // 木描画
@@ -532,18 +604,114 @@
                             ctx.fill();
                         });
 
-                        // プレイヤー描画（亀）
-                        ctx.fillStyle = '#2E7D32';
-                        ctx.beginPath();
-                        ctx.arc(crossy.player.x + crossy.player.size / 2, crossy.player.y + crossy.player.size / 2, crossy.player.size / 2, 0, Math.PI * 2);
-                        ctx.fill();
-                        ctx.fillStyle = '#A1887F';
-                        ctx.beginPath();
-                        ctx.arc(crossy.player.x + crossy.player.size / 2, crossy.player.y + crossy.player.size / 2, crossy.player.size / 3, 0, Math.PI * 2);
-                        ctx.fill();
-                        ctx.fillStyle = '#333';
-                        ctx.fillRect(crossy.player.x + 6, crossy.player.y + 6, 3, 3);
-                        ctx.fillRect(crossy.player.x + crossy.player.size - 9, crossy.player.y + 6, 3, 3);
+                        // プレイヤー描画（選択したキャラクタータイプに応じて描画）
+                        const px = crossy.player.x;
+                        const py = crossy.player.y;
+                        const pSize = crossy.player.size;
+                        const centerX = px + pSize / 2;
+                        const animFrame = Date.now() / 50;
+
+                        if (characterType === 'human') {
+                            // 人間キャラクター
+                            // 体（オレンジ色の服）
+                            ctx.fillStyle = '#FF9800';
+                            ctx.fillRect(px + pSize * 0.25, py + pSize * 0.35, pSize * 0.5, pSize * 0.5);
+
+                            // 頭（肌色）
+                            ctx.fillStyle = '#FFCC99';
+                            ctx.beginPath();
+                            ctx.arc(centerX, py + pSize * 0.25, pSize * 0.2, 0, Math.PI * 2);
+                            ctx.fill();
+
+                            // 目
+                            ctx.fillStyle = '#333';
+                            ctx.fillRect(px + pSize * 0.4, py + pSize * 0.22, pSize * 0.08, pSize * 0.08);
+                            ctx.fillRect(px + pSize * 0.52, py + pSize * 0.22, pSize * 0.08, pSize * 0.08);
+
+                            // 腕
+                            ctx.strokeStyle = '#FFCC99';
+                            ctx.lineWidth = 2;
+                            ctx.beginPath();
+                            ctx.moveTo(px + pSize * 0.25, py + pSize * 0.45);
+                            ctx.lineTo(px + pSize * 0.1, py + pSize * 0.6);
+                            ctx.moveTo(px + pSize * 0.75, py + pSize * 0.45);
+                            ctx.lineTo(px + pSize * 0.9, py + pSize * 0.6);
+                            ctx.stroke();
+
+                            // 脚
+                            ctx.beginPath();
+                            ctx.moveTo(px + pSize * 0.35, py + pSize * 0.85);
+                            ctx.lineTo(px + pSize * 0.35, py + pSize);
+                            ctx.moveTo(px + pSize * 0.65, py + pSize * 0.85);
+                            ctx.lineTo(px + pSize * 0.65, py + pSize);
+                            ctx.stroke();
+                        } else if (characterType === 'bird') {
+                            // 鳩キャラクター
+                            const wingFlap = Math.sin(animFrame / 5) * 3;
+                            // 体
+                            ctx.fillStyle = '#9E9E9E';
+                            ctx.beginPath();
+                            ctx.ellipse(centerX, py + pSize * 0.6, pSize * 0.3, pSize * 0.35, 0, 0, Math.PI * 2);
+                            ctx.fill();
+                            // 頭
+                            ctx.beginPath();
+                            ctx.arc(centerX, py + pSize * 0.3, pSize * 0.18, 0, Math.PI * 2);
+                            ctx.fill();
+                            // くちばし
+                            ctx.fillStyle = '#FFA726';
+                            ctx.beginPath();
+                            ctx.moveTo(centerX, py + pSize * 0.3);
+                            ctx.lineTo(centerX + pSize * 0.15, py + pSize * 0.28);
+                            ctx.lineTo(centerX, py + pSize * 0.33);
+                            ctx.closePath();
+                            ctx.fill();
+                            // 目
+                            ctx.fillStyle = '#000';
+                            ctx.beginPath();
+                            ctx.arc(centerX - pSize * 0.05, py + pSize * 0.28, pSize * 0.04, 0, Math.PI * 2);
+                            ctx.fill();
+                            // 翼
+                            ctx.strokeStyle = '#757575';
+                            ctx.lineWidth = 3;
+                            ctx.beginPath();
+                            ctx.moveTo(centerX - pSize * 0.3, py + pSize * 0.55);
+                            ctx.lineTo(centerX - pSize * 0.45, py + pSize * 0.45 + wingFlap);
+                            ctx.moveTo(centerX + pSize * 0.3, py + pSize * 0.55);
+                            ctx.lineTo(centerX + pSize * 0.45, py + pSize * 0.45 + wingFlap);
+                            ctx.stroke();
+                        } else if (characterType === 'dog') {
+                            // 犬キャラクター
+                            // 体
+                            ctx.fillStyle = '#8D6E63';
+                            ctx.fillRect(px + pSize * 0.2, py + pSize * 0.55, pSize * 0.6, pSize * 0.3);
+                            // 頭
+                            ctx.beginPath();
+                            ctx.arc(centerX, py + pSize * 0.38, pSize * 0.25, 0, Math.PI * 2);
+                            ctx.fill();
+                            // 耳
+                            ctx.beginPath();
+                            ctx.ellipse(centerX - pSize * 0.18, py + pSize * 0.32, pSize * 0.08, pSize * 0.15, -0.3, 0, Math.PI * 2);
+                            ctx.ellipse(centerX + pSize * 0.18, py + pSize * 0.32, pSize * 0.08, pSize * 0.15, 0.3, 0, Math.PI * 2);
+                            ctx.fill();
+                            // 目
+                            ctx.fillStyle = '#000';
+                            ctx.beginPath();
+                            ctx.arc(centerX - pSize * 0.1, py + pSize * 0.35, pSize * 0.05, 0, Math.PI * 2);
+                            ctx.arc(centerX + pSize * 0.1, py + pSize * 0.35, pSize * 0.05, 0, Math.PI * 2);
+                            ctx.fill();
+                            // 鼻
+                            ctx.beginPath();
+                            ctx.arc(centerX, py + pSize * 0.45, pSize * 0.05, 0, Math.PI * 2);
+                            ctx.fill();
+                            // しっぽ
+                            ctx.strokeStyle = '#8D6E63';
+                            ctx.lineWidth = 3;
+                            const tailWag = Math.sin(animFrame / 5) * 5;
+                            ctx.beginPath();
+                            ctx.moveTo(px + pSize * 0.8, py + pSize * 0.6);
+                            ctx.lineTo(px + pSize * 0.95, py + pSize * 0.5 + tailWag);
+                            ctx.stroke();
+                        }
 
                         gameLoopRef.current = requestAnimationFrame(gameLoop);
                         return;
@@ -652,6 +820,7 @@
                             data.player.y + data.player.height > bird.y &&
                             data.player.y < bird.y + bird.size
                         ) {
+                            data.player.state = 'falling';
                             playSound('hit');
                             setGameState('gameover');
                         }
@@ -665,6 +834,7 @@
                             data.player.y + data.player.height > poop.y &&
                             data.player.y < poop.y + 8
                         ) {
+                            data.player.state = 'falling';
                             playSound('hit');
                             setGameState('gameover');
                         }
@@ -684,9 +854,11 @@
                                 const jumpForce = enableSuperJump ? JUMP_FORCE * 1.5 : JUMP_FORCE;
                                 data.player.vy = jumpForce;
                                 data.superJumpActive = false;
+                                data.player.state = 'jumping';
                                 playSound('jump');
 
                                 if (p.type === 'goal') {
+                                    data.player.state = 'celebrating';
                                     setGameState('win');
                                 }
                             }
@@ -715,6 +887,7 @@
 
                     // ゲームオーバー
                     if (data.player.y > data.camera.y + canvas.height + 100) {
+                        data.player.state = 'falling';
                         playSound('gameover');
                         setGameState('gameover');
                     }
@@ -800,18 +973,217 @@
                         }
                     });
 
-                    // プレイヤー描画
+                    // プレイヤー描画関数（キャラクタータイプに応じて描画）
+                    const drawPlayer = (x, y, state, animFrame, charType) => {
+                        const centerX = x + data.player.width / 2;
+                        const screenY = y;
+                        
+                        if (charType === 'human') {
+                            // 人間キャラクター
+                            if (state === 'celebrating') {
+                                ctx.fillStyle = '#FF9800';
+                                ctx.fillRect(x + 10, screenY + 12, 14, 16);
+                                ctx.fillStyle = '#FFCC99';
+                                ctx.beginPath();
+                                ctx.arc(centerX, screenY + 8, 7, 0, Math.PI * 2);
+                                ctx.fill();
+                                ctx.fillStyle = '#333';
+                                ctx.fillRect(centerX - 4, screenY + 7, 2, 1);
+                                ctx.fillRect(centerX + 2, screenY + 7, 2, 1);
+                                ctx.strokeStyle = '#333';
+                                ctx.lineWidth = 1.5;
+                                ctx.beginPath();
+                                ctx.arc(centerX, screenY + 10, 3, 0, Math.PI);
+                                ctx.stroke();
+                                const waveOffset = Math.sin(animFrame / 10) * 3;
+                                ctx.strokeStyle = '#FFCC99';
+                                ctx.lineWidth = 2;
+                                ctx.beginPath();
+                                ctx.moveTo(x + 10, screenY + 15);
+                                ctx.lineTo(x + 3, screenY + 8 + waveOffset);
+                                ctx.stroke();
+                                ctx.beginPath();
+                                ctx.moveTo(x + 24, screenY + 15);
+                                ctx.lineTo(x + 31, screenY + 8 + waveOffset);
+                                ctx.stroke();
+                                ctx.beginPath();
+                                ctx.moveTo(x + 14, screenY + 28);
+                                ctx.lineTo(x + 14, screenY + 32);
+                                ctx.stroke();
+                                ctx.beginPath();
+                                ctx.moveTo(x + 20, screenY + 28);
+                                ctx.lineTo(x + 20, screenY + 32);
+                                ctx.stroke();
+                                ctx.fillStyle = '#FF6B6B';
+                                ctx.font = 'bold 16px sans-serif';
+                                ctx.textAlign = 'center';
+                                ctx.fillText('やったー！', centerX, screenY - 10);
+                            } else if (state === 'falling') {
+                                ctx.fillStyle = '#FF9800';
+                                ctx.fillRect(x + 10, screenY + 12, 14, 16);
+                                ctx.fillStyle = '#FFCC99';
+                                ctx.beginPath();
+                                ctx.arc(centerX, screenY + 8, 7, 0, Math.PI * 2);
+                                ctx.fill();
+                                ctx.strokeStyle = '#333';
+                                ctx.lineWidth = 2;
+                                ctx.beginPath();
+                                ctx.moveTo(centerX - 5, screenY + 6);
+                                ctx.lineTo(centerX - 2, screenY + 9);
+                                ctx.moveTo(centerX - 2, screenY + 6);
+                                ctx.lineTo(centerX - 5, screenY + 9);
+                                ctx.stroke();
+                                ctx.beginPath();
+                                ctx.moveTo(centerX + 2, screenY + 6);
+                                ctx.lineTo(centerX + 5, screenY + 9);
+                                ctx.moveTo(centerX + 5, screenY + 6);
+                                ctx.lineTo(centerX + 2, screenY + 9);
+                                ctx.stroke();
+                                ctx.beginPath();
+                                ctx.arc(centerX, screenY + 13, 3, Math.PI, Math.PI * 2);
+                                ctx.stroke();
+                                const flailOffset = Math.sin(animFrame / 3) * 8;
+                                ctx.strokeStyle = '#FFCC99';
+                                ctx.lineWidth = 2;
+                                ctx.beginPath();
+                                ctx.moveTo(x + 10, screenY + 15);
+                                ctx.lineTo(x + 5 + flailOffset, screenY + 20);
+                                ctx.stroke();
+                                ctx.beginPath();
+                                ctx.moveTo(x + 24, screenY + 15);
+                                ctx.lineTo(x + 29 - flailOffset, screenY + 20);
+                                ctx.stroke();
+                                ctx.beginPath();
+                                ctx.moveTo(x + 14, screenY + 28);
+                                ctx.lineTo(x + 12 - flailOffset, screenY + 32);
+                                ctx.stroke();
+                                ctx.beginPath();
+                                ctx.moveTo(x + 20, screenY + 28);
+                                ctx.lineTo(x + 22 + flailOffset, screenY + 32);
+                                ctx.stroke();
+                            } else {
+                                const bodyOffset = data.player.vy > 0 ? 0 : -2;
+                                ctx.fillStyle = '#FF9800';
+                                ctx.fillRect(x + 10, screenY + 12 - bodyOffset, 14, 16 + bodyOffset);
+                                ctx.fillStyle = '#FFCC99';
+                                ctx.beginPath();
+                                ctx.arc(centerX, screenY + 8, 7, 0, Math.PI * 2);
+                                ctx.fill();
+                                ctx.fillStyle = '#333';
+                                ctx.beginPath();
+                                ctx.arc(centerX - 3, screenY + 7, 2, 0, Math.PI * 2);
+                                ctx.arc(centerX + 3, screenY + 7, 2, 0, Math.PI * 2);
+                                ctx.fill();
+                                ctx.fillRect(centerX - 2, screenY + 11, 4, 1);
+                                ctx.strokeStyle = '#FFCC99';
+                                ctx.lineWidth = 2;
+                                const armAngle = data.player.vy < 0 ? -20 : 10;
+                                ctx.beginPath();
+                                ctx.moveTo(x + 10, screenY + 15);
+                                ctx.lineTo(x + 7, screenY + 18 + armAngle);
+                                ctx.stroke();
+                                ctx.beginPath();
+                                ctx.moveTo(x + 24, screenY + 15);
+                                ctx.lineTo(x + 27, screenY + 18 + armAngle);
+                                ctx.stroke();
+                                const legAngle = data.player.vy < 0 ? 4 : 0;
+                                ctx.beginPath();
+                                ctx.moveTo(x + 14, screenY + 28);
+                                ctx.lineTo(x + 12 + legAngle, screenY + 32);
+                                ctx.stroke();
+                                ctx.beginPath();
+                                ctx.moveTo(x + 20, screenY + 28);
+                                ctx.lineTo(x + 22 - legAngle, screenY + 32);
+                                ctx.stroke();
+                            }
+                        } else if (charType === 'bird') {
+                            // 鳩キャラクター
+                            const wingFlap = Math.sin(animFrame / 5) * 5;
+                            // 体
+                            ctx.fillStyle = '#9E9E9E';
+                            ctx.beginPath();
+                            ctx.ellipse(centerX, screenY + 18, 10, 12, 0, 0, Math.PI * 2);
+                            ctx.fill();
+                            // 頭
+                            ctx.beginPath();
+                            ctx.arc(centerX, screenY + 10, 6, 0, Math.PI * 2);
+                            ctx.fill();
+                            // くちばし
+                            ctx.fillStyle = '#FFA726';
+                            ctx.beginPath();
+                            ctx.moveTo(centerX, screenY + 10);
+                            ctx.lineTo(centerX + 5, screenY + 9);
+                            ctx.lineTo(centerX, screenY + 11);
+                            ctx.closePath();
+                            ctx.fill();
+                            // 目
+                            ctx.fillStyle = '#000';
+                            ctx.beginPath();
+                            ctx.arc(centerX - 2, screenY + 9, 1.5, 0, Math.PI * 2);
+                            ctx.arc(centerX + 2, screenY + 9, 1.5, 0, Math.PI * 2);
+                            ctx.fill();
+                            // 翼
+                            ctx.strokeStyle = '#757575';
+                            ctx.lineWidth = 3;
+                            ctx.beginPath();
+                            ctx.moveTo(centerX - 10, screenY + 18);
+                            ctx.lineTo(centerX - 15, screenY + 15 + wingFlap);
+                            ctx.moveTo(centerX + 10, screenY + 18);
+                            ctx.lineTo(centerX + 15, screenY + 15 + wingFlap);
+                            ctx.stroke();
+                            // 足
+                            ctx.strokeStyle = '#FF6B6B';
+                            ctx.lineWidth = 2;
+                            ctx.beginPath();
+                            ctx.moveTo(centerX - 3, screenY + 28);
+                            ctx.lineTo(centerX - 3, screenY + 32);
+                            ctx.moveTo(centerX + 3, screenY + 28);
+                            ctx.lineTo(centerX + 3, screenY + 32);
+                            ctx.stroke();
+                        } else if (charType === 'dog') {
+                            // 犬キャラクター
+                            // 体
+                            ctx.fillStyle = '#8D6E63';
+                            ctx.fillRect(x + 8, screenY + 18, 18, 10);
+                            // 頭
+                            ctx.beginPath();
+                            ctx.arc(centerX, screenY + 12, 8, 0, Math.PI * 2);
+                            ctx.fill();
+                            // 耳
+                            ctx.beginPath();
+                            ctx.ellipse(centerX - 6, screenY + 10, 3, 6, -0.3, 0, Math.PI * 2);
+                            ctx.ellipse(centerX + 6, screenY + 10, 3, 6, 0.3, 0, Math.PI * 2);
+                            ctx.fill();
+                            // 目
+                            ctx.fillStyle = '#000';
+                            ctx.beginPath();
+                            ctx.arc(centerX - 3, screenY + 11, 2, 0, Math.PI * 2);
+                            ctx.arc(centerX + 3, screenY + 11, 2, 0, Math.PI * 2);
+                            ctx.fill();
+                            // 鼻
+                            ctx.fillStyle = '#000';
+                            ctx.beginPath();
+                            ctx.arc(centerX, screenY + 15, 2, 0, Math.PI * 2);
+                            ctx.fill();
+                            // しっぽ
+                            ctx.strokeStyle = '#8D6E63';
+                            ctx.lineWidth = 3;
+                            const tailWag = Math.sin(animFrame / 5) * 10;
+                            ctx.beginPath();
+                            ctx.moveTo(x + 26, screenY + 20);
+                            ctx.lineTo(x + 30, screenY + 15 + tailWag);
+                            ctx.stroke();
+                            // 足
+                            ctx.fillStyle = '#8D6E63';
+                            ctx.fillRect(x + 10, screenY + 28, 3, 6);
+                            ctx.fillRect(x + 15, screenY + 28, 3, 6);
+                            ctx.fillRect(x + 20, screenY + 28, 3, 6);
+                        }
+                    };
+                    
                     const playerScreenY = data.player.y - data.camera.y;
-                    ctx.fillStyle = '#FFD93D';
-                    ctx.fillRect(data.player.x, playerScreenY, data.player.width, data.player.height);
-
-                    // 顔
-                    ctx.fillStyle = '#333';
-                    const centerX = data.player.x + data.player.width / 2;
-                    ctx.beginPath();
-                    ctx.arc(centerX - 7, playerScreenY + 12, 3, 0, Math.PI * 2);
-                    ctx.arc(centerX + 7, playerScreenY + 12, 3, 0, Math.PI * 2);
-                    ctx.fill();
+                    data.player.animFrame = (data.player.animFrame + 0.2) % 360;
+                    drawPlayer(data.player.x, playerScreenY, data.player.state, data.player.animFrame, characterType);
 
                     gameLoopRef.current = requestAnimationFrame(gameLoop);
                 };
@@ -823,7 +1195,7 @@
                         cancelAnimationFrame(gameLoopRef.current);
                     }
                 };
-            }, [gameState]);
+            }, [gameState, characterType]);
 
             // タッチ操作
             useEffect(() => {
@@ -836,8 +1208,8 @@
                 };
 
                 const handleTouchStart = (e) => {
-                    if (gameState !== 'playing') return;
                     e.preventDefault();
+                    if (gameState !== 'playing') return;
                     const touchX = e.touches[0].clientX;
                     const touchY = e.touches[0].clientY;
                     const data = gameDataRef.current;
@@ -976,6 +1348,24 @@
                 setGameState('playing');
             };
 
+            const handleBackToMenu = (e) => {
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                // 累積スコアをリセット
+                setTotalScore(0);
+                setIsNewHighScore(false);
+                setHighScoreMessage('');
+                const data = gameDataRef.current;
+                data.crossy.level = 1;
+                data.crossy.speedMultiplier = 1;
+                data.crossy.score = 0;
+                setCrossyLevel(1);
+                setScore(0);
+                setGameState('menu');
+            };
+
             const handleNextLevel = (e) => {
                 if (e) {
                     e.preventDefault();
@@ -1024,12 +1414,14 @@
                     {gameState === 'playing' && (
                         <>
                             <div className="score">
-                                {gameMode === 'pyoko' ? `スコア: ${score}` : `スコア: ${score} / 面: ${crossyLevel}`}
+                                {gameMode === 'pyoko' 
+                                    ? `スコア: ${score}` 
+                                    : `スコア: ${score} / 面: ${crossyLevel} / 合計: ${totalScore + score}`}
                             </div>
                             <div className="high-score">
                                 {gameMode === 'pyoko'
                                     ? `ハイスコア: ${highScores.pyoko.name || '---'} ${highScores.pyoko.score}m`
-                                    : `ハイスコア: ${highScores.crossy.name || '---'} ${highScores.crossy.score}`}
+                                    : `ハイスコア: ${highScores.crossy.name || '---'} ${highScores.crossy.score}点`}
                             </div>
                             <div className="controls-hint">
                                 {gameMode === 'pyoko' && (
@@ -1110,12 +1502,12 @@
                                             e.stopPropagation();
                                             setGameMode('pyoko');
                                             setScore(0);
-                                            setGameState('start');
+                                            setGameState('character');
                                         }}
                                         onClick={() => {
                                             setGameMode('pyoko');
                                             setScore(0);
-                                            setGameState('start');
+                                            setGameState('character');
                                         }}
                                     >
                                         🏠 お家へ帰ろう
@@ -1144,6 +1536,60 @@
                                         }}
                                     >
                                         🐥 クロッシーロード
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {gameState === 'character' && (
+                            <div className="message-box">
+                                <h1>🎭 キャラクターを選んでね</h1>
+                                <p>好きなキャラクターを選択してください</p>
+                                <div className="menu-buttons">
+                                    <button
+                                        className="btn"
+                                        onTouchEnd={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setCharacterType('human');
+                                            setGameState('start');
+                                        }}
+                                        onClick={() => {
+                                            setCharacterType('human');
+                                            setGameState('start');
+                                        }}
+                                    >
+                                        🧑 人間
+                                    </button>
+                                    <button
+                                        className="btn secondary"
+                                        onTouchEnd={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setCharacterType('bird');
+                                            setGameState('start');
+                                        }}
+                                        onClick={() => {
+                                            setCharacterType('bird');
+                                            setGameState('start');
+                                        }}
+                                    >
+                                        🕊️ 鳩
+                                    </button>
+                                    <button
+                                        className="btn secondary"
+                                        onTouchEnd={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setCharacterType('dog');
+                                            setGameState('start');
+                                        }}
+                                        onClick={() => {
+                                            setCharacterType('dog');
+                                            setGameState('start');
+                                        }}
+                                    >
+                                        🐕 犬
                                     </button>
                                 </div>
                             </div>
@@ -1178,12 +1624,17 @@
                             <div className="message-box">
                                 <h1 style={{color: '#FF6B6B'}}>ゲームオーバー</h1>
                                 {gameMode === 'pyoko' && <p>到達高さ: {score}m</p>}
-                                {gameMode === 'crossy' && <p>スコア: {score} / 面: {crossyLevel}</p>}
+                                {gameMode === 'crossy' && (
+                                    <>
+                                        <p>面: {crossyLevel}</p>
+                                        <p style={{fontSize: '20px', fontWeight: 'bold'}}>合計スコア: {totalScore + score}点</p>
+                                    </>
+                                )}
                                 {ranking.length > 0 ? (
                                     <div>
                                         <p>🏆 ハイスコアランキング</p>
                                         {ranking.map((r, i) => (
-                                            <p key={`${r.name}-${i}`}>{i + 1}. {r.name} - {r.score}{gameMode === 'pyoko' ? 'm' : ''}</p>
+                                            <p key={`${r.name}-${i}`}>{i + 1}. {r.name} - {r.score}{gameMode === 'pyoko' ? 'm' : '点'}</p>
                                         ))}
                                         {topPlayer && <p>トップの{topPlayer.name}さん、神レベルです！</p>}
                                     </div>
@@ -1206,9 +1657,9 @@
                                     onTouchEnd={(e) => {
                                         e.preventDefault();
                                         e.stopPropagation();
-                                        setGameState('menu');
+                                        handleBackToMenu(e);
                                     }}
-                                    onClick={() => setGameState('menu')}
+                                    onClick={handleBackToMenu}
                                 >
                                     ゲーム選択へ
                                 </button>
@@ -1227,56 +1678,59 @@
                                     </>
                                 )}
                                 {gameMode === 'crossy' && (
-                                    <p>次の面は車が速くなります！</p>
+                                    <>
+                                        <p style={{fontSize: '18px', fontWeight: 'bold'}}>
+                                            面{crossyLevel}クリア！ ボーナス +{crossyLevel * 10}点
+                                        </p>
+                                        <p style={{fontSize: '24px', color: '#FF6B6B', fontWeight: 'bold'}}>
+                                            合計スコア: {totalScore}点
+                                        </p>
+                                        {isNewHighScore && (
+                                            <p style={{fontSize: '20px', color: '#FFD700', fontWeight: 'bold', animation: 'pulse 0.5s infinite'}}>
+                                                🎊 新記録達成！ 🎊<br/>
+                                                {highScoreMessage}
+                                            </p>
+                                        )}
+                                        <p style={{marginTop: '10px'}}>次の面へ自動で進みます...</p>
+                                    </>
                                 )}
                                 {ranking.length > 0 ? (
                                     <div>
                                         <p>🏆 ハイスコアランキング</p>
                                         {ranking.map((r, i) => (
-                                            <p key={`${r.name}-${i}`}>{i + 1}. {r.name} - {r.score}{gameMode === 'pyoko' ? 'm' : ''}</p>
+                                            <p key={`${r.name}-${i}`}>{i + 1}. {r.name} - {r.score}{gameMode === 'pyoko' ? 'm' : '点'}</p>
                                         ))}
-                                        {topPlayer && <p>トップの{topPlayer.name}さん、天才すぎます！</p>}
+                                        {topPlayer && !isNewHighScore && <p>トップの{topPlayer.name}さん、天才すぎます！</p>}
                                     </div>
                                 ) : (
                                     <p>まだランキングがありません。</p>
                                 )}
                                 {gameMode === 'pyoko' && (
-                                    <button
-                                        className="btn"
-                                        onTouchEnd={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            handleRetry(e);
-                                        }}
-                                        onClick={handleRetry}
-                                    >
-                                        また遊ぶ
-                                    </button>
+                                    <>
+                                        <button
+                                            className="btn"
+                                            onTouchEnd={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                handleRetry(e);
+                                            }}
+                                            onClick={handleRetry}
+                                        >
+                                            また遊ぶ
+                                        </button>
+                                        <button
+                                            className="btn secondary"
+                                            onTouchEnd={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setGameState('menu');
+                                            }}
+                                            onClick={() => setGameState('menu')}
+                                        >
+                                            ゲーム選択へ
+                                        </button>
+                                    </>
                                 )}
-                                {gameMode === 'crossy' && (
-                                    <button
-                                        className="btn"
-                                        onTouchEnd={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            handleNextLevel(e);
-                                        }}
-                                        onClick={handleNextLevel}
-                                    >
-                                        次の面へ
-                                    </button>
-                                )}
-                                <button
-                                    className="btn secondary"
-                                    onTouchEnd={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        setGameState('menu');
-                                    }}
-                                    onClick={() => setGameState('menu')}
-                                >
-                                    ゲーム選択へ
-                                </button>
                             </div>
                         )}
                     </div>
