@@ -155,8 +155,18 @@
         let animationId;
 
         // サウンド管理
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let audioCtx = null;
         let isMuted = false;
+
+        // AudioContextの初期化（ユーザーインタラクション後）
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
 
         function toggleMute() {
             isMuted = !isMuted;
@@ -165,7 +175,7 @@
 
         const sounds = {
             jump: () => {
-                if (isMuted) return;
+                if (isMuted || !audioCtx) return;
                 const osc = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
                 osc.type = 'sine';
@@ -179,7 +189,7 @@
                 osc.stop(audioCtx.currentTime + 0.15);
             },
             break: () => {
-                if (isMuted) return;
+                if (isMuted || !audioCtx) return;
                 const osc = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
                 osc.type = 'square';
@@ -193,7 +203,7 @@
                 osc.stop(audioCtx.currentTime + 0.15);
             },
             gameover: () => {
-                if (isMuted) return;
+                if (isMuted || !audioCtx) return;
                 const osc = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
                 osc.type = 'triangle';
@@ -207,7 +217,7 @@
                 osc.stop(audioCtx.currentTime + 0.5);
             },
             win: () => {
-                if (isMuted) return;
+                if (isMuted || !audioCtx) return;
                 const now = audioCtx.currentTime;
                 [0, 0.1, 0.2, 0.4].forEach((t, i) => {
                     const osc = audioCtx.createOscillator();
@@ -661,6 +671,7 @@
 
         // ゲーム開始
         function startGame() {
+            initAudio();
             gameState = 'playing';
             document.getElementById('start-screen').style.display = 'none';
             document.getElementById('gameover-screen').style.display = 'none';
@@ -671,11 +682,13 @@
 
         // ゲームリセット
         function resetGame() {
+            initAudio();
             gameState = 'playing';
             document.getElementById('start-screen').style.display = 'none';
             document.getElementById('gameover-screen').style.display = 'none';
             document.getElementById('win-screen').style.display = 'none';
             initGame();
+            gameLoop();
         }
 
         // ゲームオーバー
