@@ -511,6 +511,9 @@
             ctx.fillStyle = grad;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+            // ゲーム開始前は描画しない
+            if (gameState === 'start') return;
+
             // 雲描画
             clouds.forEach(c => {
                 ctx.fillStyle = `rgba(255, 255, 255, ${c.opacity})`;
