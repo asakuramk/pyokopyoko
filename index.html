@@ -3,21 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>お家へ帰ろう：ぴょこぴょこジャンプ</title>
+    <title>お家へ帰ろう v1.0</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <style>
-        body {
+        * {
             margin: 0;
             padding: 0;
+            box-sizing: border-box;
+        }
+        body {
             overflow: hidden;
-            background: linear-gradient(to bottom, #FFB6C1 0%, #FFC0CB 100%); /* ピンク色のグラデーション */
-            font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+            background: linear-gradient(to bottom, #FFB6C1 0%, #FFC0CB 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
             touch-action: none;
             user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+        }
+        #root {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        .game-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
         }
         canvas {
             display: block;
+            touch-action: none;
         }
-        #ui-layer {
+        .ui-overlay {
             position: absolute;
             top: 0;
             left: 0;
@@ -27,754 +46,367 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            flex-direction: column;
         }
         .message-box {
             background: rgba(255, 255, 255, 0.95);
-            padding: 25px 45px;
+            padding: 30px 50px;
             border-radius: 20px;
             text-align: center;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
             pointer-events: auto;
-            display: none;
-            border: 4px solid #FFD93D;
-            transform: scale(0.9);
-            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            border: 5px solid #FFD93D;
+            max-width: 90%;
         }
-        @keyframes popIn {
-            to { transform: scale(1); }
-        }
-        h1 {
+        .message-box h1 {
             margin: 0 0 15px 0;
             color: #333;
-            font-size: 28px;
-            text-shadow: 1px 1px 0 #FFF;
+            font-size: 32px;
         }
-        p {
-            margin: 0 0 25px 0;
+        .message-box p {
+            margin: 0 0 20px 0;
             color: #555;
-            font-weight: bold;
-            line-height: 1.5;
+            font-size: 16px;
+            line-height: 1.6;
         }
-        button {
+        .version {
+            font-size: 14px !important;
+            color: #FF6B6B !important;
+            font-weight: bold;
+            margin-bottom: 5px !important;
+        }
+        .btn {
             background: #FF6B6B;
             color: white;
             border: none;
-            padding: 15px 40px;
-            font-size: 20px;
+            padding: 15px 45px;
+            font-size: 22px;
             border-radius: 50px;
             cursor: pointer;
             font-weight: bold;
-            box-shadow: 0 4px 0 #D64545;
-            transition: transform 0.1s, box-shadow 0.1s;
-            pointer-events: auto;
+            box-shadow: 0 5px 0 #D64545;
+            transition: all 0.1s;
             touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
         }
-        button:active {
-            transform: translateY(4px);
+        .btn:active {
+            transform: translateY(5px);
             box-shadow: 0 0 0 #D64545;
         }
-        button:hover {
-            opacity: 0.9;
-        }
-        #score-display {
+        .score {
             position: absolute;
             top: 15px;
             left: 15px;
             color: white;
             font-weight: bold;
-            font-size: 22px;
-            text-shadow: 2px 2px 0px rgba(0,0,0,0.3);
-            pointer-events: none;
-            background: rgba(0,0,0,0.2);
-            padding: 5px 15px;
-            border-radius: 20px;
-        }
-        #volume-btn {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            background: rgba(255,255,255,0.8);
-            border: none;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
             font-size: 20px;
-            cursor: pointer;
-            pointer-events: auto;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            background: rgba(0,0,0,0.3);
+            padding: 8px 20px;
+            border-radius: 25px;
+            pointer-events: none;
         }
-        #controls-hint {
+        .controls-hint {
             position: absolute;
             bottom: 20px;
             width: 100%;
             text-align: center;
-            color: rgba(255, 255, 255, 0.9);
+            color: white;
             font-size: 14px;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
             pointer-events: none;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
         }
     </style>
 </head>
 <body>
+    <div id="root"></div>
 
-    <canvas id="gameCanvas"></canvas>
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
 
-    <div id="score-display">高さ: 0m</div>
-    <button id="volume-btn" onclick="toggleMute()">🔊</button>
-
-    <div id="ui-layer">
-        <!-- スタート画面 -->
-        <div id="start-screen" class="message-box" style="display: block;">
-            <h1>🏠 お家へ帰ろう</h1>
-            <p style="font-size: 16px; color: #FF6B6B; font-weight: bold; margin-bottom: 10px;">v2.2 📱Safari対応強化！</p>
-            <p>ちょっと難しくなったよ！<br>動く床や、壊れる床に気をつけて！</p>
-            <p style="font-size: 12px;">音が出ます 🔊</p>
-            <button id="start-btn">スタート！</button>
-        </div>
-
-        <!-- ゲームオーバー画面 -->
-        <div id="gameover-screen" class="message-box">
-            <h1 style="color: #FF6B6B;">落ちちゃった...</h1>
-            <p>あきらめないで！</p>
-            <button id="retry-btn">もう一回！</button>
-        </div>
-
-        <!-- クリア画面 -->
-        <div id="win-screen" class="message-box">
-            <h1 style="color: #4ECDC4;">🎉 ただいまっ！</h1>
-            <p>無事にお家に帰れました！<br>すごい！！</p>
-            <button id="again-btn">また遊ぶ</button>
-        </div>
-    </div>
-
-    <div id="controls-hint">PC: 矢印キー / スマホ: 画面左右タップ</div>
-
-    <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-
-        let gameState = 'start';
-        let animationId;
-
-        // サウンド管理
-        let audioCtx = null;
-        let isMuted = false;
-
-        // AudioContextの初期化（ユーザーインタラクション後）
-        function initAudio() {
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
-        }
-
-        function toggleMute() {
-            isMuted = !isMuted;
-            document.getElementById('volume-btn').innerText = isMuted ? '🔇' : '🔊';
-        }
-
-        // ボタンイベントハンドラー（Safari対応強化版）
-        function attachButtonHandlers() {
-            const startBtn = document.getElementById('start-btn');
-            const retryBtn = document.getElementById('retry-btn');
-            const againBtn = document.getElementById('again-btn');
-            
-            function addClickHandler(btn, handler) {
-                if (!btn) return;
-                
-                // タッチイベント（優先）
-                btn.addEventListener('touchstart', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handler();
-                }, { passive: false });
-                
-                // クリックイベント（フォールバック）
-                btn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handler();
-                }, { passive: false });
-                
-                // さらにmousedownも追加
-                btn.addEventListener('mousedown', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handler();
-                }, { passive: false });
-            }
-            
-            addClickHandler(startBtn, startGame);
-            addClickHandler(retryBtn, resetGame);
-            addClickHandler(againBtn, resetGame);
-        }
-
-        const sounds = {
-            jump: () => {
-                if (isMuted || !audioCtx) return;
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.1);
-                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.15);
-            },
-            break: () => {
-                if (isMuted || !audioCtx) return;
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = 'square';
-                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.1);
-                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.15);
-            },
-            gameover: () => {
-                if (isMuted || !audioCtx) return;
-                const osc = audioCtx.createOscillator();
-                const gain = audioCtx.createGain();
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
-                osc.frequency.linearRampToValueAtTime(100, audioCtx.currentTime + 0.5);
-                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-                gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
-                osc.connect(gain);
-                gain.connect(audioCtx.destination);
-                osc.start();
-                osc.stop(audioCtx.currentTime + 0.5);
-            },
-            win: () => {
-                if (isMuted || !audioCtx) return;
-                const now = audioCtx.currentTime;
-                [0, 0.1, 0.2, 0.4].forEach((t, i) => {
-                    const osc = audioCtx.createOscillator();
-                    const gain = audioCtx.createGain();
-                    osc.type = 'triangle';
-                    const freq = [523.25, 659.25, 783.99, 1046.50][i]; // C E G C
-                    osc.frequency.setValueAtTime(freq, now + t);
-                    gain.gain.setValueAtTime(0.2, now + t);
-                    gain.gain.exponentialRampToValueAtTime(0.01, now + t + 0.4);
-                    osc.connect(gain);
-                    gain.connect(audioCtx.destination);
-                    osc.start(now + t);
-                    osc.stop(now + t + 0.5);
-                });
-            }
-        };
-
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        }
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas();
-
-        const GRAVITY = 0.4;
-        const JUMP_FORCE = -11.5;
-        const MOVE_SPEED = 5.5;
-        const PLATFORM_HEIGHT = 18;
-        const GOAL_HEIGHT = 6000;
-
-        let player = {
-            x: 0, y: 0, width: 34, height: 34, vx: 0, vy: 0,
-            color: '#FFD93D',
-            face: 'normal'
-        };
-
-        let camera = { y: 0 };
-        let platforms = [];
-        let particles = [];
-        let clouds = [];
-        let house = { x: 0, y: 0 };
-        let maxScore = 0;
-        let keys = { left: false, right: false };
-
-        // 背景の雲
-        function initClouds() {
-            clouds = [];
-            for(let i=0; i<15; i++) {
-                clouds.push({
-                    x: Math.random() * canvas.width,
-                    y: Math.random() * canvas.height,
-                    speed: 0.2 + Math.random() * 0.5,
-                    size: 30 + Math.random() * 50,
-                    opacity: 0.3 + Math.random() * 0.4
-                });
-            }
-        }
-
-        window.addEventListener('keydown', (e) => {
-            if (e.code === 'ArrowLeft') keys.left = true;
-            if (e.code === 'ArrowRight') keys.right = true;
-        });
-        window.addEventListener('keyup', (e) => {
-            if (e.code === 'ArrowLeft') keys.left = false;
-            if (e.code === 'ArrowRight') keys.right = false;
-        });
-        window.addEventListener('touchstart', (e) => {
-            if(gameState !== 'playing') return;
-            e.preventDefault();
-            const touchX = e.touches[0].clientX;
-            if (touchX < window.innerWidth / 2) {
-                keys.left = true; keys.right = false;
-            } else {
-                keys.right = true; keys.left = false;
-            }
-        });
-        window.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            keys.left = false; keys.right = false;
-        });
-
-        class Particle {
-            constructor(x, y, color) {
-                this.x = x; this.y = y;
-                this.vx = (Math.random() - 0.5) * 6;
-                this.vy = (Math.random() - 0.5) * 6;
-                this.life = 1.0;
-                this.color = color;
-                this.size = Math.random() * 4 + 2;
-            }
-            update() {
-                this.x += this.vx; this.y += this.vy;
-                this.life -= 0.04;
-                this.size *= 0.95;
-            }
-            draw(ctx, camY) {
-                ctx.globalAlpha = this.life;
-                ctx.fillStyle = this.color;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y - camY, this.size, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.globalAlpha = 1.0;
-            }
-        }
-
-        function createParticles(x, y, color) {
-            for (let i = 0; i < 8; i++) {
-                particles.push(new Particle(x, y, color));
-            }
-        }
-
-        function initGame() {
-            player.x = canvas.width / 2 - player.width / 2;
-            player.y = canvas.height - 150;
-            player.vx = 0; player.vy = 0;
-            player.face = 'normal';
-
-            camera.y = 0;
-            maxScore = 0;
-            particles = [];
-            initClouds();
-
-            platforms = [];
-            // 初期足場
-            let prevX = canvas.width / 2 - 100;
-            platforms.push({
-                x: prevX, y: canvas.height - 50, w: 200, h: 20,
-                type: 'normal', vx: 0
+        function Game() {
+            const canvasRef = useRef(null);
+            const [gameState, setGameState] = useState('start');
+            const [score, setScore] = useState(0);
+            const gameLoopRef = useRef(null);
+            const gameDataRef = useRef({
+                player: { x: 0, y: 0, vx: 0, vy: 0, width: 34, height: 34 },
+                platforms: [],
+                camera: { y: 0 },
+                keys: { left: false, right: false },
+                maxScore: 0
             });
 
-            let currentY = canvas.height - 50;
-            let level = 0; // 難易度レベル
+            const GRAVITY = 0.4;
+            const JUMP_FORCE = -11.5;
+            const MOVE_SPEED = 5.5;
+            const GOAL_HEIGHT = 6000;
 
-            while (currentY > -GOAL_HEIGHT) {
-                const gap = 70 + Math.random() * 60; // 縦の間隔
-                currentY -= gap;
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
 
-                // レベル計算 (高さに応じて難易度アップ)
-                const height = canvas.height - currentY;
-                level = Math.floor(height / 1000); // 1000mごとにレベルアップ
+                const resizeCanvas = () => {
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                };
+                resizeCanvas();
+                window.addEventListener('resize', resizeCanvas);
 
-                let w = 90 - (level * 5); // だんだん狭く
-                if(w < 50) w = 50;
-                w = w + Math.random() * 20;
+                return () => window.removeEventListener('resize', resizeCanvas);
+            }, []);
 
-                // 横位置の計算（届く範囲で）
-                let minX = Math.max(0, prevX - 280);
-                let maxX = Math.min(canvas.width - w, prevX + 280);
+            useEffect(() => {
+                if (gameState !== 'playing') return;
 
-                // 詰み防止
-                if (maxX - minX < 60) {
-                     if (prevX < canvas.width / 2) maxX = Math.min(canvas.width - w, minX + 350);
-                     else minX = Math.max(0, maxX - 350);
-                }
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
 
-                let x = minX + Math.random() * (maxX - minX);
+                // ゲーム初期化
+                const initGame = () => {
+                    const data = gameDataRef.current;
+                    data.player.x = canvas.width / 2 - 17;
+                    data.player.y = canvas.height - 150;
+                    data.player.vx = 0;
+                    data.player.vy = 0;
+                    data.camera.y = 0;
+                    data.maxScore = 0;
 
-                // 足場タイプ決定
-                let type = 'normal';
-                let pVx = 0;
+                    // 足場生成
+                    data.platforms = [];
+                    let prevX = canvas.width / 2 - 100;
+                    data.platforms.push({
+                        x: prevX, y: canvas.height - 50, w: 200, h: 20, type: 'normal'
+                    });
 
-                const rand = Math.random();
-                // 高さがある程度ある場合のみ特殊足場出現
-                if (height > 500) {
-                    if (rand < 0.2 + (level * 0.05)) type = 'moving';
-                    else if (rand < 0.35 + (level * 0.05)) type = 'fragile';
-                }
+                    let currentY = canvas.height - 50;
+                    while (currentY > -GOAL_HEIGHT) {
+                        const gap = 70 + Math.random() * 60;
+                        currentY -= gap;
 
-                if (type === 'moving') {
-                    pVx = (Math.random() < 0.5 ? -1 : 1) * (2 + Math.random() * 2);
-                }
+                        let w = 90 + Math.random() * 20;
+                        let minX = Math.max(0, prevX - 280);
+                        let maxX = Math.min(canvas.width - w, prevX + 280);
+                        let x = minX + Math.random() * (maxX - minX);
 
-                platforms.push({
-                    x: x, y: currentY, w: w, h: PLATFORM_HEIGHT,
-                    type: type, vx: pVx,
-                    active: true // fragile用
-                });
+                        data.platforms.push({
+                            x: x, y: currentY, w: w, h: 20, type: 'normal'
+                        });
+                        prevX = x;
+                    }
 
-                prevX = x;
-            }
+                    // ゴール
+                    data.platforms.push({
+                        x: canvas.width / 2 - 150, y: -GOAL_HEIGHT,
+                        w: 300, h: 20, type: 'goal'
+                    });
+                };
 
-            house = {
-                x: canvas.width / 2 - 50,
-                y: -GOAL_HEIGHT - 120,
-                w: 100, h: 100
+                initGame();
+
+                // ゲームループ
+                const gameLoop = () => {
+                    const data = gameDataRef.current;
+                    
+                    // 更新
+                    if (data.keys.left) data.player.vx = -MOVE_SPEED;
+                    else if (data.keys.right) data.player.vx = MOVE_SPEED;
+                    else data.player.vx *= 0.8;
+
+                    data.player.x += data.player.vx;
+                    if (data.player.x + data.player.width < 0) data.player.x = canvas.width;
+                    if (data.player.x > canvas.width) data.player.x = -data.player.width;
+
+                    data.player.vy += GRAVITY;
+                    data.player.y += data.player.vy;
+
+                    // 衝突判定
+                    if (data.player.vy > 0) {
+                        data.platforms.forEach(p => {
+                            if (
+                                data.player.x + data.player.width > p.x &&
+                                data.player.x < p.x + p.w &&
+                                data.player.y + data.player.height > p.y &&
+                                data.player.y + data.player.height < p.y + p.h + 10
+                            ) {
+                                data.player.y = p.y - data.player.height;
+                                data.player.vy = JUMP_FORCE;
+
+                                if (p.type === 'goal') {
+                                    setGameState('win');
+                                }
+                            }
+                        });
+                    }
+
+                    // カメラ
+                    const targetCamY = data.player.y - canvas.height / 2;
+                    if (targetCamY < data.camera.y) {
+                        data.camera.y = targetCamY;
+                    }
+
+                    // スコア
+                    const currentHeight = Math.floor((canvas.height - data.player.y) / 10);
+                    if (currentHeight > data.maxScore) {
+                        data.maxScore = currentHeight;
+                        setScore(currentHeight);
+                    }
+
+                    // ゲームオーバー
+                    if (data.player.y > data.camera.y + canvas.height + 100) {
+                        setGameState('gameover');
+                    }
+
+                    // 描画
+                    const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                    grad.addColorStop(0, '#FFB6C1');
+                    grad.addColorStop(1, '#FFC0CB');
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    // 足場描画
+                    data.platforms.forEach(p => {
+                        const screenY = p.y - data.camera.y;
+                        if (screenY > -50 && screenY < canvas.height + 50) {
+                            ctx.fillStyle = p.type === 'goal' ? '#FFD93D' : '#65B741';
+                            ctx.fillRect(p.x, screenY, p.w, p.h);
+                        }
+                    });
+
+                    // プレイヤー描画
+                    const playerScreenY = data.player.y - data.camera.y;
+                    ctx.fillStyle = '#FFD93D';
+                    ctx.fillRect(data.player.x, playerScreenY, data.player.width, data.player.height);
+                    
+                    // 顔
+                    ctx.fillStyle = '#333';
+                    const centerX = data.player.x + data.player.width / 2;
+                    ctx.beginPath();
+                    ctx.arc(centerX - 7, playerScreenY + 12, 3, 0, Math.PI * 2);
+                    ctx.arc(centerX + 7, playerScreenY + 12, 3, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    gameLoopRef.current = requestAnimationFrame(gameLoop);
+                };
+
+                gameLoop();
+
+                return () => {
+                    if (gameLoopRef.current) {
+                        cancelAnimationFrame(gameLoopRef.current);
+                    }
+                };
+            }, [gameState]);
+
+            // タッチ操作
+            useEffect(() => {
+                const handleTouchStart = (e) => {
+                    if (gameState !== 'playing') return;
+                    e.preventDefault();
+                    const touchX = e.touches[0].clientX;
+                    const data = gameDataRef.current;
+                    if (touchX < window.innerWidth / 2) {
+                        data.keys.left = true;
+                        data.keys.right = false;
+                    } else {
+                        data.keys.right = true;
+                        data.keys.left = false;
+                    }
+                };
+
+                const handleTouchEnd = (e) => {
+                    e.preventDefault();
+                    const data = gameDataRef.current;
+                    data.keys.left = false;
+                    data.keys.right = false;
+                };
+
+                const handleKeyDown = (e) => {
+                    const data = gameDataRef.current;
+                    if (e.code === 'ArrowLeft') data.keys.left = true;
+                    if (e.code === 'ArrowRight') data.keys.right = true;
+                };
+
+                const handleKeyUp = (e) => {
+                    const data = gameDataRef.current;
+                    if (e.code === 'ArrowLeft') data.keys.left = false;
+                    if (e.code === 'ArrowRight') data.keys.right = false;
+                };
+
+                window.addEventListener('touchstart', handleTouchStart, { passive: false });
+                window.addEventListener('touchend', handleTouchEnd, { passive: false });
+                window.addEventListener('keydown', handleKeyDown);
+                window.addEventListener('keyup', handleKeyUp);
+
+                return () => {
+                    window.removeEventListener('touchstart', handleTouchStart);
+                    window.removeEventListener('touchend', handleTouchEnd);
+                    window.removeEventListener('keydown', handleKeyDown);
+                    window.removeEventListener('keyup', handleKeyUp);
+                };
+            }, [gameState]);
+
+            const handleStart = () => {
+                setScore(0);
+                setGameState('playing');
             };
 
-            platforms.push({
-                x: canvas.width / 2 - 150, y: -GOAL_HEIGHT,
-                w: 300, h: 20, type: 'goal', vx: 0
-            });
+            const handleRetry = () => {
+                setScore(0);
+                setGameState('playing');
+            };
+
+            return (
+                <div className="game-container">
+                    <canvas ref={canvasRef} />
+                    
+                    {gameState === 'playing' && (
+                        <>
+                            <div className="score">高さ: {score}m</div>
+                            <div className="controls-hint">
+                                PC: 矢印キー / スマホ: 画面左右タップ
+                            </div>
+                        </>
+                    )}
+
+                    <div className="ui-overlay">
+                        {gameState === 'start' && (
+                            <div className="message-box">
+                                <h1>🏠 お家へ帰ろう</h1>
+                                <p className="version">v1.0 React版</p>
+                                <p>ジャンプして6000m上のお家を目指そう！</p>
+                                <button className="btn" onTouchStart={handleStart} onClick={handleStart}>
+                                    スタート！
+                                </button>
+                            </div>
+                        )}
+
+                        {gameState === 'gameover' && (
+                            <div className="message-box">
+                                <h1 style={{color: '#FF6B6B'}}>落ちちゃった...</h1>
+                                <p>到達高さ: {score}m</p>
+                                <button className="btn" onTouchStart={handleRetry} onClick={handleRetry}>
+                                    もう一回！
+                                </button>
+                            </div>
+                        )}
+
+                        {gameState === 'win' && (
+                            <div className="message-box">
+                                <h1 style={{color: '#4ECDC4'}}>🎉 ただいまっ！</h1>
+                                <p>無事にお家に帰れました！</p>
+                                <p>到達高さ: {score}m</p>
+                                <button className="btn" onTouchStart={handleRetry} onClick={handleRetry}>
+                                    また遊ぶ
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
         }
 
-        function update() {
-            if (gameState !== 'playing') return;
-
-            // プレイヤー移動
-            if (keys.left) player.vx = -MOVE_SPEED;
-            else if (keys.right) player.vx = MOVE_SPEED;
-            else player.vx *= 0.8;
-
-            player.x += player.vx;
-
-            if (player.x + player.width < 0) player.x = canvas.width;
-            if (player.x > canvas.width) player.x = -player.width;
-
-            player.vy += GRAVITY;
-            player.y += player.vy;
-
-            // 表情制御
-            if(player.vy < -5) player.face = 'jump';
-            else if(player.vy > 5) player.face = 'fall';
-            else player.face = 'normal';
-
-            // 足場の移動
-            platforms.forEach(p => {
-                if (p.type === 'moving') {
-                    p.x += p.vx;
-                    if (p.x <= 0 || p.x + p.w >= canvas.width) {
-                        p.vx *= -1;
-                    }
-                }
-            });
-
-            // 当たり判定
-            if (player.vy > 0) {
-                for (let i = 0; i < platforms.length; i++) {
-                    let p = platforms[i];
-                    if (!p.active && p.type === 'fragile') continue; // 壊れた足場は無視
-
-                    if (
-                        player.x + player.width > p.x &&
-                        player.x < p.x + p.w &&
-                        player.y + player.height > p.y &&
-                        player.y + player.height < p.y + p.h + player.vy + 2
-                    ) {
-                        player.y = p.y - player.height;
-                        player.vy = JUMP_FORCE;
-
-                        sounds.jump(); // 音鳴らす
-                        createParticles(player.x + player.width/2, player.y + player.height, '#FFF');
-
-                        // 壊れる足場の処理
-                        if (p.type === 'fragile') {
-                            p.active = false; // 次から乗れない
-                            sounds.break();
-                            createParticles(p.x + p.w/2, p.y + p.h/2, '#A0522D');
-                        }
-                    }
-                }
-            }
-
-            const targetCamY = player.y - canvas.height / 2;
-            if (targetCamY < camera.y) {
-                camera.y = targetCamY;
-            }
-
-            const currentHeight = Math.floor((canvas.height - player.y) / 10);
-            if (currentHeight > maxScore) maxScore = currentHeight;
-            document.getElementById('score-display').innerText = `高さ: ${maxScore}m / ゴール: ${Math.floor((canvas.height - house.y)/10)}m`;
-
-            if (
-                player.x < house.x + house.w &&
-                player.x + player.width > house.x &&
-                player.y < house.y + house.h &&
-                player.y + player.height > house.y
-            ) {
-                gameWin();
-            }
-
-            if (player.y > camera.y + canvas.height + 100) {
-                gameOver();
-            }
-
-            particles = particles.filter(p => p.life > 0);
-            particles.forEach(p => p.update());
-
-            // 雲の移動
-            clouds.forEach(c => {
-                c.x += c.speed;
-                if(c.x > canvas.width + 50) c.x = -50;
-            });
-        }
-
-        function draw() {
-            // 背景クリア & グラデーション（ピンク色）
-            const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            grad.addColorStop(0, '#FFB6C1');
-            grad.addColorStop(1, '#FFC0CB');
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            // ゲーム開始前は描画しない
-            if (gameState === 'start') return;
-
-            // 雲描画
-            clouds.forEach(c => {
-                ctx.fillStyle = `rgba(255, 255, 255, ${c.opacity})`;
-                ctx.beginPath();
-                ctx.arc(c.x, c.y, c.size, 0, Math.PI * 2);
-                ctx.arc(c.x + c.size*0.7, c.y - c.size*0.3, c.size*0.8, 0, Math.PI * 2);
-                ctx.arc(c.x + c.size*1.2, c.y + c.size*0.1, c.size*0.7, 0, Math.PI * 2);
-                ctx.fill();
-            });
-
-            // 足場描画
-            platforms.forEach(p => {
-                if (p.y - camera.y > -50 && p.y - camera.y < canvas.height + 50) {
-                    if (p.type === 'fragile' && !p.active) return; // 壊れた足場は描画しない
-
-                    // 足場の色設定
-                    let color = '#65B741'; // Normal: 緑
-                    let shadow = '#4fa030';
-                    if (p.type === 'moving') {
-                        color = '#4FC3F7'; // Moving: 青
-                        shadow = '#29B6F6';
-                    } else if (p.type === 'fragile') {
-                        color = '#D7CCC8'; // Fragile: 茶/ベージュ
-                        shadow = '#A1887F';
-                    }
-
-                    // 角丸の矩形
-                    ctx.fillStyle = color;
-                    roundRect(ctx, p.x, p.y - camera.y, p.w, p.h, 5, true, false);
-
-                    // 影
-                    ctx.fillStyle = shadow;
-                    roundRect(ctx, p.x, p.y - camera.y + p.h - 5, p.w, 5, 5, true, false);
-
-                    // 壊れる足場の模様
-                    if (p.type === 'fragile') {
-                        ctx.strokeStyle = '#A1887F';
-                        ctx.lineWidth = 2;
-                        ctx.beginPath();
-                        ctx.moveTo(p.x + 10, p.y - camera.y + 2);
-                        ctx.lineTo(p.x + p.w - 10, p.y - camera.y + p.h - 2);
-                        ctx.stroke();
-                    }
-                    // 動く足場の模様
-                    if (p.type === 'moving') {
-                         ctx.fillStyle = 'rgba(255,255,255,0.5)';
-                         ctx.beginPath();
-                         ctx.arc(p.x + 10, p.y - camera.y + p.h/2, 3, 0, Math.PI*2);
-                         ctx.arc(p.x + p.w - 10, p.y - camera.y + p.h/2, 3, 0, Math.PI*2);
-                         ctx.fill();
-                    }
-                }
-            });
-
-            // ゴール（お家）
-            const houseScreenY = house.y - camera.y;
-            // 壁
-            ctx.fillStyle = '#FFF8E1';
-            ctx.fillRect(house.x, houseScreenY + 40, house.w, house.h - 40);
-            // 屋根
-            ctx.fillStyle = '#FF5252';
-            ctx.beginPath();
-            ctx.moveTo(house.x - 15, houseScreenY + 40);
-            ctx.lineTo(house.x + house.w / 2, houseScreenY);
-            ctx.lineTo(house.x + house.w + 15, houseScreenY + 40);
-            ctx.fill();
-            // ドア
-            ctx.fillStyle = '#795548';
-            ctx.fillRect(house.x + house.w/2 - 15, houseScreenY + 60, 30, 40);
-            ctx.fillStyle = '#FFD700';
-            ctx.beginPath(); ctx.arc(house.x + house.w/2 + 10, houseScreenY + 80, 3, 0, Math.PI*2); ctx.fill();
-
-            // プレイヤー描画
-            const playerScreenY = player.y - camera.y;
-            ctx.fillStyle = player.color;
-            let stretch = 1 + Math.abs(player.vy) * 0.03;
-            if (stretch > 1.3) stretch = 1.3;
-            let pWidth = player.width / stretch;
-            let pHeight = player.height * stretch;
-
-            // 本体
-            roundRect(ctx, player.x + (player.width - pWidth)/2, playerScreenY + (player.height - pHeight), pWidth, pHeight, 8, true, false);
-
-            // 顔
-            ctx.fillStyle = '#333';
-            ctx.beginPath();
-            let faceY = playerScreenY + (player.height - pHeight) + pHeight * 0.4;
-            let centerX = player.x + player.width/2;
-            let eyeOffset = 7;
-
-            // 目
-            if (player.face === 'fall') {
-                // ＞＜
-                drawEye(ctx, centerX - eyeOffset, faceY, 'x');
-                drawEye(ctx, centerX + eyeOffset, faceY, 'x');
-            } else {
-                // ● ●
-                ctx.arc(centerX - eyeOffset, faceY, 3, 0, Math.PI*2);
-                ctx.arc(centerX + eyeOffset, faceY, 3, 0, Math.PI*2);
-            }
-            ctx.fill();
-
-            // 口
-            ctx.beginPath();
-            ctx.strokeStyle = '#333';
-            ctx.lineWidth = 2;
-            if (player.face === 'jump') {
-                ctx.arc(centerX, faceY + 5, 4, 0, Math.PI, false); // 笑い口
-            } else if (player.face === 'fall') {
-                ctx.arc(centerX, faceY + 8, 3, 0, Math.PI*2, false); // 驚き口
-            } else {
-                ctx.moveTo(centerX - 3, faceY + 5);
-                ctx.lineTo(centerX + 3, faceY + 5); // 真顔
-            }
-            ctx.stroke();
-
-            // ほっぺ
-            ctx.fillStyle = 'rgba(255, 0, 0, 0.2)';
-            ctx.beginPath();
-            ctx.arc(centerX - 12, faceY + 2, 4, 0, Math.PI*2);
-            ctx.arc(centerX + 12, faceY + 2, 4, 0, Math.PI*2);
-            ctx.fill();
-
-            // パーティクル
-            particles.forEach(p => p.draw(ctx, camera.y));
-        }
-
-        // 角丸矩形描画ヘルパー
-        function roundRect(ctx, x, y, width, height, radius, fill, stroke) {
-            if (typeof stroke === 'undefined') { stroke = true; }
-            if (typeof radius === 'undefined') { radius = 5; }
-            if (typeof radius === 'number') { radius = {tl: radius, tr: radius, br: radius, bl: radius}; } else { var defaultRadius = {tl: 0, tr: 0, br: 0, bl: 0}; for (var side in defaultRadius) { radius[side] = radius[side] || defaultRadius[side]; } }
-            ctx.beginPath();
-            ctx.moveTo(x + radius.tl, y);
-            ctx.lineTo(x + width - radius.tr, y);
-            ctx.quadraticCurveTo(x + width, y, x + width, y + radius.tr);
-            ctx.lineTo(x + width, y + height - radius.br);
-            ctx.quadraticCurveTo(x + width, y + height, x + width - radius.br, y + height);
-            ctx.lineTo(x + radius.bl, y + height);
-            ctx.quadraticCurveTo(x, y + height, x, y + height - radius.bl);
-            ctx.lineTo(x, y + radius.tl);
-            ctx.quadraticCurveTo(x, y, x + radius.tl, y);
-            ctx.closePath();
-            if (fill) { ctx.fill(); }
-            if (stroke) { ctx.stroke(); }
-        }
-
-        // 目描画ヘルパー
-        function drawEye(ctx, x, y, type) {
-            ctx.beginPath();
-            if (type === 'x') {
-                ctx.moveTo(x - 3, y - 3);
-                ctx.lineTo(x + 3, y + 3);
-                ctx.moveTo(x + 3, y - 3);
-                ctx.lineTo(x - 3, y + 3);
-                ctx.stroke();
-            }
-        }
-
-        // ゲーム開始
-        function startGame() {
-            initAudio();
-            gameState = 'playing';
-            document.getElementById('start-screen').style.display = 'none';
-            document.getElementById('gameover-screen').style.display = 'none';
-            document.getElementById('win-screen').style.display = 'none';
-            initGame();
-            if (animationId) cancelAnimationFrame(animationId);
-            gameLoop();
-        }
-
-        // ゲームリセット
-        function resetGame() {
-            initAudio();
-            gameState = 'playing';
-            document.getElementById('start-screen').style.display = 'none';
-            document.getElementById('gameover-screen').style.display = 'none';
-            document.getElementById('win-screen').style.display = 'none';
-            initGame();
-            if (animationId) cancelAnimationFrame(animationId);
-            gameLoop();
-        }
-
-        // ゲームオーバー
-        function gameOver() {
-            gameState = 'gameover';
-            sounds.gameover();
-            document.getElementById('gameover-screen').style.display = 'block';
-        }
-
-        // クリア
-        function gameWin() {
-            gameState = 'win';
-            sounds.win();
-            document.getElementById('win-screen').style.display = 'block';
-        }
-
-        // ゲームループ
-        function gameLoop() {
-            update();
-            draw();
-            if (gameState === 'playing') {
-                animationId = requestAnimationFrame(gameLoop);
-            }
-        }
-
-        // ページロード時にボタンハンドラーを設定（Safari対応）
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', function() {
-                setTimeout(attachButtonHandlers, 100);
-            });
-        } else {
-            setTimeout(attachButtonHandlers, 100);
-        }
-        
-        // さらに確実性を高めるため、loadイベントでも実行
-        window.addEventListener('load', function() {
-            setTimeout(attachButtonHandlers, 100);
-        });
-
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<Game />);
     </script>
 </body>
 </html>
