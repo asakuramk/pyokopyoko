@@ -9,7 +9,7 @@
             margin: 0;
             padding: 0;
             overflow: hidden;
-            background: linear-gradient(to bottom, #87CEEB 0%, #E0F7FA 100%); /* 空のグラデーション */
+            background: linear-gradient(to bottom, #6B9DBE 0%, #8CB8D9 100%); /* 空のグラデーション（暗め） */
             font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
             touch-action: none;
             user-select: none;
@@ -130,24 +130,24 @@
         <!-- スタート画面 -->
         <div id="start-screen" class="message-box" style="display: block;">
             <h1>🏠 お家へ帰ろう</h1>
-            <p style="font-size: 16px; color: #FF6B6B; font-weight: bold; margin-bottom: 10px;">v2.0 📱スマホ対応！</p>
+            <p style="font-size: 16px; color: #FF6B6B; font-weight: bold; margin-bottom: 10px;">v2.1 📱スマホ対応！</p>
             <p>ちょっと難しくなったよ！<br>動く床や、壊れる床に気をつけて！</p>
             <p style="font-size: 12px;">音が出ます 🔊</p>
-            <button onclick="startGame()">スタート！</button>
+            <button id="start-btn">スタート！</button>
         </div>
 
         <!-- ゲームオーバー画面 -->
         <div id="gameover-screen" class="message-box">
             <h1 style="color: #FF6B6B;">落ちちゃった...</h1>
             <p>あきらめないで！</p>
-            <button onclick="resetGame()">もう一回！</button>
+            <button id="retry-btn">もう一回！</button>
         </div>
 
         <!-- クリア画面 -->
         <div id="win-screen" class="message-box">
             <h1 style="color: #4ECDC4;">🎉 ただいまっ！</h1>
             <p>無事にお家に帰れました！<br>すごい！！</p>
-            <button onclick="resetGame()">また遊ぶ</button>
+            <button id="again-btn">また遊ぶ</button>
         </div>
     </div>
 
@@ -177,6 +177,35 @@
         function toggleMute() {
             isMuted = !isMuted;
             document.getElementById('volume-btn').innerText = isMuted ? '🔇' : '🔊';
+        }
+
+        // ボタンイベントハンドラー（オンライン化）
+        function attachButtonHandlers() {
+            const startBtn = document.getElementById('start-btn');
+            const retryBtn = document.getElementById('retry-btn');
+            const againBtn = document.getElementById('again-btn');
+            
+            if (startBtn) {
+                startBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    startGame();
+                }, { passive: false });
+            }
+            if (retryBtn) {
+                retryBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    resetGame();
+                }, { passive: false });
+            }
+            if (againBtn) {
+                againBtn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    resetGame();
+                }, { passive: false });
+            }
         }
 
         const sounds = {
@@ -509,10 +538,10 @@
         }
 
         function draw() {
-            // 背景クリア & グラデーション
+            // 背景クリア & グラデーション（暗め）
             const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            grad.addColorStop(0, '#87CEEB');
-            grad.addColorStop(1, '#B0E0E6');
+            grad.addColorStop(0, '#6B9DBE');
+            grad.addColorStop(1, '#8CB8D9');
             ctx.fillStyle = grad;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -680,27 +709,25 @@
 
         // ゲーム開始
         function startGame() {
-            event.preventDefault();
-            event.stopPropagation();
             initAudio();
             gameState = 'playing';
             document.getElementById('start-screen').style.display = 'none';
             document.getElementById('gameover-screen').style.display = 'none';
             document.getElementById('win-screen').style.display = 'none';
             initGame();
+            if (animationId) cancelAnimationFrame(animationId);
             gameLoop();
         }
 
         // ゲームリセット
         function resetGame() {
-            event.preventDefault();
-            event.stopPropagation();
             initAudio();
             gameState = 'playing';
             document.getElementById('start-screen').style.display = 'none';
             document.getElementById('gameover-screen').style.display = 'none';
             document.getElementById('win-screen').style.display = 'none';
             initGame();
+            if (animationId) cancelAnimationFrame(animationId);
             gameLoop();
         }
 
@@ -725,6 +752,14 @@
             if (gameState === 'playing') {
                 animationId = requestAnimationFrame(gameLoop);
             }
+        }
+
+        // ページロード時にボタンハンドラーを設定
+        window.addEventListener('DOMContentLoaded', attachButtonHandlers);
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', attachButtonHandlers);
+        } else {
+            attachButtonHandlers();
         }
 
     </script>
