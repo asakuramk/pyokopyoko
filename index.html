@@ -285,11 +285,16 @@
 
             useEffect(() => {
                 const savedPlayers = JSON.parse(localStorage.getItem('players') || '[]');
-                const lastName = localStorage.getItem('lastPlayerName') || '';
+                const lastName = localStorage.getItem('lastPlayerName') || 'トム';
                 setPlayers(savedPlayers);
                 setHighScores(computeHighScores(savedPlayers));
                 setNameInput(lastName);
-                setGameState('name');
+                setPlayerName(lastName);
+                // デフォルトプレイヤーがいなければ追加
+                if (!savedPlayers.some(p => p.name === lastName)) {
+                    setPlayers(prev => [...prev, { name: lastName, pyokoHigh: 0, crossyHigh: 0 }]);
+                }
+                setGameState('menu');
             }, []);
 
             useEffect(() => {
