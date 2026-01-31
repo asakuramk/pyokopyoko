@@ -895,8 +895,9 @@
                             });
                         }
 
-                        // スコア
-                        const currentCrossyScore = Math.max(0, Math.floor((canvas.height - crossy.player.y) / 10));
+                        // スコア（player.yがNaNや未定義の場合は初期値を使う）
+                        const playerY = (typeof crossy.player.y === 'number' && !isNaN(crossy.player.y)) ? crossy.player.y : (canvas.height - 60);
+                        const currentCrossyScore = Math.max(0, Math.floor((canvas.height - playerY) / 10));
                         if (currentCrossyScore > crossy.score) {
                             crossy.score = currentCrossyScore;
                             setScore(currentCrossyScore);
