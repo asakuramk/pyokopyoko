@@ -67,10 +67,15 @@
             font-weight: bold;
             box-shadow: 0 4px 0 #D64545;
             transition: transform 0.1s, box-shadow 0.1s;
+            pointer-events: auto;
+            touch-action: manipulation;
         }
         button:active {
             transform: translateY(4px);
             box-shadow: 0 0 0 #D64545;
+        }
+        button:hover {
+            opacity: 0.9;
         }
         #score-display {
             position: absolute;
@@ -675,6 +680,8 @@
 
         // ゲーム開始
         function startGame() {
+            event.preventDefault();
+            event.stopPropagation();
             initAudio();
             gameState = 'playing';
             document.getElementById('start-screen').style.display = 'none';
@@ -686,6 +693,8 @@
 
         // ゲームリセット
         function resetGame() {
+            event.preventDefault();
+            event.stopPropagation();
             initAudio();
             gameState = 'playing';
             document.getElementById('start-screen').style.display = 'none';
