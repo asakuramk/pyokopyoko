@@ -15,7 +15,7 @@
         }
         body {
             overflow: hidden;
-            background: #FFB6D9;
+            background: #87CEEB;
             font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
             touch-action: none;
             user-select: none;
@@ -145,7 +145,11 @@
                 platforms: [],
                 camera: { y: 0 },
                 keys: { left: false, right: false },
-                maxScore: 0
+                maxScore: 0,
+                clouds: [],
+                birds: [],
+                poops: [],
+                audioCtx: null
             });
 
             const GRAVITY = 0.4;
@@ -183,6 +187,40 @@
                     data.camera.y = 0;
                     data.maxScore = 0;
 
+                    // 音の初期化
+                    if (!data.audioCtx) {
+                        data.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    }
+                    if (data.audioCtx.state === 'suspended') {
+                        data.audioCtx.resume();
+                    }
+
+                    // 雲の初期化
+                    data.clouds = [];
+                    for (let i = 0; i < 15; i++) {
+                        data.clouds.push({
+                            x: Math.random() * canvas.width,
+                            y: Math.random() * canvas.height - Math.random() * GOAL_HEIGHT,
+                            speed: 0.2 + Math.random() * 0.3,
+                            size: 30 + Math.random() * 40
+                        });
+                    }
+
+                    // 鳥の初期化
+                    data.birds = [];
+                    for (let i = 0; i < 5; i++) {
+                        data.birds.push({
+                            x: Math.random() * canvas.width,
+                            y: -1000 - Math.random() * (GOAL_HEIGHT - 1000),
+                            vx: (Math.random() < 0.5 ? -1 : 1) * (1.5 + Math.random()),
+                            size: 20,
+                            poopTimer: Math.random() * 200
+                        });
+                    }
+
+                    // うんち配列
+                    data.poops = [];
+
                     // 足場生成
                     data.platforms = [];
                     let prevX = canvas.width / 2 - 100;
@@ -215,6 +253,47 @@
 
                 initGame();
 
+                // 音を鳴らす関数
+                const playSound = (type) => {
+                    const audioCtx = gameDataRef.current.audioCtx;
+                    if (!audioCtx) return;
+
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+
+                    if (type === 'jump') {
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                        osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.1);
+                        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.start();
+                        osc.stop(audioCtx.currentTime + 0.15);
+                    } else if (type === 'gameover') {
+                        osc.type = 'triangle';
+                        osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                        osc.frequency.linearRampToValueAtTime(100, audioCtx.currentTime + 0.5);
+                        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                        gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.start();
+                        osc.stop(audioCtx.currentTime + 0.5);
+                    } else if (type === 'hit') {
+                        osc.type = 'square';
+                        osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+                        osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.2);
+                        gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                        osc.connect(gain);
+                        gain.connect(audioCtx.destination);
+                        osc.start();
+                        osc.stop(audioCtx.currentTime + 0.2);
+                    }
+                };
+
                 // ゲームループ
                 const gameLoop = () => {
                     const data = gameDataRef.current;
@@ -231,6 +310,69 @@
                     data.player.vy += GRAVITY;
                     data.player.y += data.player.vy;
 
+                    // 雲の更新
+                    data.clouds.forEach(c => {
+                        c.x += c.speed;
+                        if (c.x > canvas.width + 100) {
+                            c.x = -100;
+                            c.y = data.camera.y - 200 - Math.random() * 400;
+                        }
+                    });
+
+                    // 鳥の更新
+                    data.birds.forEach(bird => {
+                        bird.x += bird.vx;
+                        if (bird.x < -50 || bird.x > canvas.width + 50) {
+                            bird.vx *= -1;
+                        }
+
+                        // うんちを落とす
+                        bird.poopTimer--;
+                        if (bird.poopTimer <= 0) {
+                            data.poops.push({
+                                x: bird.x + 10,
+                                y: bird.y + 10,
+                                vy: 2
+                            });
+                            bird.poopTimer = 150 + Math.random() * 100;
+                        }
+                    });
+
+                    // うんちの更新
+                    data.poops.forEach(poop => {
+                        poop.y += poop.vy;
+                        poop.vy += 0.2; // 重力
+                    });
+                    data.poops = data.poops.filter(poop => poop.y < data.camera.y + canvas.height + 100);
+
+                    // 鳥との衝突判定
+                    data.birds.forEach(bird => {
+                        const birdScreenY = bird.y - data.camera.y;
+                        if (
+                            Math.abs(birdScreenY - (data.player.y - data.camera.y)) < canvas.height &&
+                            data.player.x + data.player.width > bird.x &&
+                            data.player.x < bird.x + bird.size &&
+                            data.player.y + data.player.height > bird.y &&
+                            data.player.y < bird.y + bird.size
+                        ) {
+                            playSound('hit');
+                            setGameState('gameover');
+                        }
+                    });
+
+                    // うんちとの衝突判定
+                    data.poops.forEach(poop => {
+                        if (
+                            data.player.x + data.player.width > poop.x &&
+                            data.player.x < poop.x + 8 &&
+                            data.player.y + data.player.height > poop.y &&
+                            data.player.y < poop.y + 8
+                        ) {
+                            playSound('hit');
+                            setGameState('gameover');
+                        }
+                    });
+
                     // 衝突判定
                     if (data.player.vy > 0) {
                         data.platforms.forEach(p => {
@@ -242,6 +384,7 @@
                             ) {
                                 data.player.y = p.y - data.player.height;
                                 data.player.vy = JUMP_FORCE;
+                                playSound('jump');
 
                                 if (p.type === 'goal') {
                                     setGameState('win');
@@ -265,12 +408,62 @@
 
                     // ゲームオーバー
                     if (data.player.y > data.camera.y + canvas.height + 100) {
+                        playSound('gameover');
                         setGameState('gameover');
                     }
 
-                    // 描画（ピンク背景）
-                    ctx.fillStyle = '#FFB6D9';
+                    // 描画（水色背景）
+                    const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+                    grad.addColorStop(0, '#87CEEB');
+                    grad.addColorStop(1, '#B0E0E6');
+                    ctx.fillStyle = grad;
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    // 雲描画
+                    data.clouds.forEach(c => {
+                        const cloudY = c.y - data.camera.y;
+                        if (cloudY > -100 && cloudY < canvas.height + 100) {
+                            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                            ctx.beginPath();
+                            ctx.arc(c.x, cloudY, c.size, 0, Math.PI * 2);
+                            ctx.arc(c.x + c.size * 0.6, cloudY - c.size * 0.3, c.size * 0.8, 0, Math.PI * 2);
+                            ctx.arc(c.x + c.size * 1.1, cloudY + c.size * 0.1, c.size * 0.7, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                    });
+
+                    // 鳥描画
+                    data.birds.forEach(bird => {
+                        const birdY = bird.y - data.camera.y;
+                        if (birdY > -100 && birdY < canvas.height + 100) {
+                            ctx.fillStyle = '#8B4513';
+                            ctx.beginPath();
+                            ctx.arc(bird.x + 10, birdY + 10, 8, 0, Math.PI * 2);
+                            ctx.fill();
+                            
+                            // 翼
+                            ctx.strokeStyle = '#8B4513';
+                            ctx.lineWidth = 3;
+                            ctx.beginPath();
+                            const wingOffset = Math.sin(Date.now() / 100) * 5;
+                            ctx.moveTo(bird.x, birdY + 10);
+                            ctx.lineTo(bird.x - 8, birdY + wingOffset);
+                            ctx.moveTo(bird.x + 20, birdY + 10);
+                            ctx.lineTo(bird.x + 28, birdY + wingOffset);
+                            ctx.stroke();
+                        }
+                    });
+
+                    // うんち描画
+                    data.poops.forEach(poop => {
+                        const poopY = poop.y - data.camera.y;
+                        if (poopY > -20 && poopY < canvas.height + 20) {
+                            ctx.fillStyle = '#8B4513';
+                            ctx.beginPath();
+                            ctx.arc(poop.x, poopY, 4, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                    });
 
                     // 足場描画
                     data.platforms.forEach(p => {
@@ -384,7 +577,7 @@
             return (
                 <div className="game-container">
                     <canvas ref={canvasRef} />
-                    
+
                     <div className="update-time">更新: {updateTime}</div>
 
                     {gameState === 'playing' && (
@@ -402,8 +595,8 @@
                                 <h1>🏠 お家へ帰ろう</h1>
                                 <p className="version">v1.0 React版</p>
                                 <p>ジャンプして6000m上のお家を目指そう！</p>
-                                <button 
-                                    className="btn" 
+                                <button
+                                    className="btn"
                                     onTouchEnd={(e) => {
                                         e.preventDefault();
                                         e.stopPropagation();
@@ -420,8 +613,8 @@
                             <div className="message-box">
                                 <h1 style={{color: '#FF6B6B'}}>落ちちゃった...</h1>
                                 <p>到達高さ: {score}m</p>
-                                <button 
-                                    className="btn" 
+                                <button
+                                    className="btn"
                                     onTouchEnd={(e) => {
                                         e.preventDefault();
                                         e.stopPropagation();
@@ -439,8 +632,8 @@
                                 <h1 style={{color: '#4ECDC4'}}>🎉 ただいまっ！</h1>
                                 <p>無事にお家に帰れました！</p>
                                 <p>到達高さ: {score}m</p>
-                                <button 
-                                    className="btn" 
+                                <button
+                                    className="btn"
                                     onTouchEnd={(e) => {
                                         e.preventDefault();
                                         e.stopPropagation();
