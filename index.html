@@ -175,7 +175,8 @@
             const [players, setPlayers] = useState([]);
             const [highScores, setHighScores] = useState({
                 pyoko: { name: '', score: 0 },
-                crossy: { name: '', score: 0 }
+                crossy: { name: '', score: 0 },
+                snake: { name: '', score: 0 }
             });
             const [crossyLevel, setCrossyLevel] = useState(1);
             const [score, setScore] = useState(0);
@@ -208,6 +209,16 @@
                     score: 0,
                     level: 1,
                     speedMultiplier: 1
+                },
+                snake: {
+                    body: [],
+                    direction: 'right',
+                    nextDirection: 'right',
+                    food: { x: 0, y: 0 },
+                    gridSize: 20,
+                    score: 0,
+                    speed: 150,
+                    lastMove: 0
                 }
             });
 
@@ -246,7 +257,10 @@
                 const bestCrossy = list.reduce((acc, p) => {
                     return p.crossyHigh > acc.score ? { name: p.name, score: p.crossyHigh } : acc;
                 }, { name: '', score: 0 });
-                return { pyoko: bestPyoko, crossy: bestCrossy };
+                const bestSnake = list.reduce((acc, p) => {
+                    return (p.snakeHigh || 0) > acc.score ? { name: p.name, score: p.snakeHigh || 0 } : acc;
+                }, { name: '', score: 0 });
+                return { pyoko: bestPyoko, crossy: bestCrossy, snake: bestSnake };
             };
 
             const updatePlayerScore = (mode, newScore) => {
@@ -258,7 +272,8 @@
                         updated.push({
                             name: playerName,
                             pyokoHigh: mode === 'pyoko' ? newScore : 0,
-                            crossyHigh: mode === 'crossy' ? newScore : 0
+                            crossyHigh: mode === 'crossy' ? newScore : 0,
+                            snakeHigh: mode === 'snake' ? newScore : 0
                         });
                     } else {
                         if (mode === 'pyoko' && newScore > updated[index].pyokoHigh) {
@@ -266,6 +281,9 @@
                         }
                         if (mode === 'crossy' && newScore > updated[index].crossyHigh) {
                             updated[index].crossyHigh = newScore;
+                        }
+                        if (mode === 'snake' && newScore > (updated[index].snakeHigh || 0)) {
+                            updated[index].snakeHigh = newScore;
                         }
                     }
                     setHighScores(computeHighScores(updated));
@@ -440,8 +458,10 @@
 
                 if (gameMode === 'pyoko') {
                     initGame();
-                } else {
+                } else if (gameMode === 'crossy') {
                     initCrossy();
+                } else if (gameMode === 'snake') {
+                    initSnake();
                 }
 
                 // 音を鳴らす関数
@@ -512,9 +532,191 @@
                     }
                 };
 
+                // 餌を配置
+                const spawnFood = () => {
+                    const data = gameDataRef.current;
+                    const snake = data.snake;
+                    const gridSize = snake.gridSize;
+                    const cols = Math.floor(canvas.width / gridSize);
+                    const rows = Math.floor(canvas.height / gridSize);
+                    
+                    let newFood;
+                    do {
+                        newFood = {
+                            x: Math.floor(Math.random() * cols),
+                            y: Math.floor(Math.random() * rows)
+                        };
+                    } while (snake.body.some(seg => seg.x === newFood.x && seg.y === newFood.y));
+                    
+                    snake.food = newFood;
+                };
+
+                // スネークゲーム初期化
+                const initSnake = () => {
+                    const data = gameDataRef.current;
+                    const snake = data.snake;
+                    const gridSize = snake.gridSize;
+                    const cols = Math.floor(canvas.width / gridSize);
+                    const rows = Math.floor(canvas.height / gridSize);
+                    
+                    // 蛇の初期位置（中央付近）
+                    const startX = Math.floor(cols / 2);
+                    const startY = Math.floor(rows / 2);
+                    snake.body = [
+                        { x: startX, y: startY },
+                        { x: startX - 1, y: startY },
+                        { x: startX - 2, y: startY }
+                    ];
+                    snake.direction = 'right';
+                    snake.nextDirection = 'right';
+                    snake.score = 0;
+                    snake.speed = 150;
+                    snake.lastMove = Date.now();
+                    
+                    // 餌の配置
+                    spawnFood();
+                };
+
                 // ゲームループ
                 const gameLoop = () => {
                     const data = gameDataRef.current;
+
+                    // スネークゲーム
+                    if (gameMode === 'snake') {
+                        const snake = data.snake;
+                        const gridSize = snake.gridSize;
+                        const cols = Math.floor(canvas.width / gridSize);
+                        const rows = Math.floor(canvas.height / gridSize);
+                        const now = Date.now();
+                        
+                        // 移動タイミング
+                        if (now - snake.lastMove > snake.speed) {
+                            snake.lastMove = now;
+                            snake.direction = snake.nextDirection;
+                            
+                            // 頭の新しい位置を計算
+                            const head = { ...snake.body[0] };
+                            switch (snake.direction) {
+                                case 'up': head.y -= 1; break;
+                                case 'down': head.y += 1; break;
+                                case 'left': head.x -= 1; break;
+                                case 'right': head.x += 1; break;
+                            }
+                            
+                            // 壁との衝突判定
+                            if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows) {
+                                playSound('hit');
+                                updatePlayerScore('snake', snake.score);
+                                setGameState('gameover');
+                                return;
+                            }
+                            
+                            // 自分自身との衝突判定
+                            if (snake.body.some(seg => seg.x === head.x && seg.y === head.y)) {
+                                playSound('hit');
+                                updatePlayerScore('snake', snake.score);
+                                setGameState('gameover');
+                                return;
+                            }
+                            
+                            // 餌を食べたか
+                            if (head.x === snake.food.x && head.y === snake.food.y) {
+                                playSound('jump');
+                                snake.score += 10;
+                                setScore(snake.score);
+                                snake.body.unshift(head);
+                                spawnFood();
+                                // スピードアップ
+                                if (snake.speed > 50) {
+                                    snake.speed -= 2;
+                                }
+                            } else {
+                                snake.body.unshift(head);
+                                snake.body.pop();
+                            }
+                        }
+                        
+                        // 描画
+                        // 背景（濃い緑のグリッド）
+                        ctx.fillStyle = '#1a1a2e';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        
+                        // グリッド線
+                        ctx.strokeStyle = '#2a2a4e';
+                        ctx.lineWidth = 1;
+                        for (let x = 0; x <= canvas.width; x += gridSize) {
+                            ctx.beginPath();
+                            ctx.moveTo(x, 0);
+                            ctx.lineTo(x, canvas.height);
+                            ctx.stroke();
+                        }
+                        for (let y = 0; y <= canvas.height; y += gridSize) {
+                            ctx.beginPath();
+                            ctx.moveTo(0, y);
+                            ctx.lineTo(canvas.width, y);
+                            ctx.stroke();
+                        }
+                        
+                        // 餌（りんご）
+                        const foodX = snake.food.x * gridSize + gridSize / 2;
+                        const foodY = snake.food.y * gridSize + gridSize / 2;
+                        ctx.fillStyle = '#FF6B6B';
+                        ctx.beginPath();
+                        ctx.arc(foodX, foodY, gridSize / 2 - 2, 0, Math.PI * 2);
+                        ctx.fill();
+                        // りんごの葉
+                        ctx.fillStyle = '#4CAF50';
+                        ctx.beginPath();
+                        ctx.ellipse(foodX + 2, foodY - gridSize / 2 + 4, 4, 6, 0.5, 0, Math.PI * 2);
+                        ctx.fill();
+                        
+                        // 蛇の体
+                        snake.body.forEach((seg, i) => {
+                            const x = seg.x * gridSize;
+                            const y = seg.y * gridSize;
+                            
+                            if (i === 0) {
+                                // 頭
+                                ctx.fillStyle = '#4CAF50';
+                                ctx.fillRect(x + 1, y + 1, gridSize - 2, gridSize - 2);
+                                
+                                // 目
+                                ctx.fillStyle = '#FFF';
+                                const eyeOffset = gridSize / 4;
+                                let eye1X, eye1Y, eye2X, eye2Y;
+                                switch (snake.direction) {
+                                    case 'right':
+                                        eye1X = x + gridSize - 6; eye1Y = y + 4;
+                                        eye2X = x + gridSize - 6; eye2Y = y + gridSize - 8;
+                                        break;
+                                    case 'left':
+                                        eye1X = x + 4; eye1Y = y + 4;
+                                        eye2X = x + 4; eye2Y = y + gridSize - 8;
+                                        break;
+                                    case 'up':
+                                        eye1X = x + 4; eye1Y = y + 4;
+                                        eye2X = x + gridSize - 8; eye2Y = y + 4;
+                                        break;
+                                    case 'down':
+                                        eye1X = x + 4; eye1Y = y + gridSize - 8;
+                                        eye2X = x + gridSize - 8; eye2Y = y + gridSize - 8;
+                                        break;
+                                }
+                                ctx.beginPath();
+                                ctx.arc(eye1X + 2, eye1Y + 2, 3, 0, Math.PI * 2);
+                                ctx.arc(eye2X + 2, eye2Y + 2, 3, 0, Math.PI * 2);
+                                ctx.fill();
+                            } else {
+                                // 体
+                                const shade = Math.max(0.5, 1 - i * 0.02);
+                                ctx.fillStyle = `rgba(76, 175, 80, ${shade})`;
+                                ctx.fillRect(x + 2, y + 2, gridSize - 4, gridSize - 4);
+                            }
+                        });
+                        
+                        gameLoopRef.current = requestAnimationFrame(gameLoop);
+                        return;
+                    }
 
                     if (gameMode === 'crossy') {
                         const crossy = data.crossy;
@@ -1358,6 +1560,28 @@
                         }
                         return;
                     }
+                    if (gameMode === 'snake') {
+                        const centerX = window.innerWidth / 2;
+                        const centerY = window.innerHeight / 2;
+                        const snake = data.snake;
+                        // タップ位置に応じて方向を決定
+                        if (Math.abs(touchX - centerX) > Math.abs(touchY - centerY)) {
+                            // 左右
+                            if (touchX < centerX && snake.direction !== 'right') {
+                                snake.nextDirection = 'left';
+                            } else if (touchX >= centerX && snake.direction !== 'left') {
+                                snake.nextDirection = 'right';
+                            }
+                        } else {
+                            // 上下
+                            if (touchY < centerY && snake.direction !== 'down') {
+                                snake.nextDirection = 'up';
+                            } else if (touchY >= centerY && snake.direction !== 'up') {
+                                snake.nextDirection = 'down';
+                            }
+                        }
+                        return;
+                    }
                     if (touchX < window.innerWidth / 2) {
                         data.keys.left = true;
                         data.keys.right = false;
@@ -1377,6 +1601,23 @@
                 const handleKeyDown = (e) => {
                     const data = gameDataRef.current;
                     if (gameState !== 'playing') return;
+
+                    if (gameMode === 'snake') {
+                        const snake = data.snake;
+                        if (e.code === 'ArrowUp' && snake.direction !== 'down') {
+                            snake.nextDirection = 'up';
+                        }
+                        if (e.code === 'ArrowDown' && snake.direction !== 'up') {
+                            snake.nextDirection = 'down';
+                        }
+                        if (e.code === 'ArrowLeft' && snake.direction !== 'right') {
+                            snake.nextDirection = 'left';
+                        }
+                        if (e.code === 'ArrowRight' && snake.direction !== 'left') {
+                            snake.nextDirection = 'right';
+                        }
+                        return;
+                    }
 
                     if (gameMode === 'crossy') {
                         if (e.code === 'ArrowUp') moveCrossy(0, -1);
@@ -1527,7 +1768,7 @@
                 return players
                     .map(p => ({
                         name: p.name,
-                        score: mode === 'pyoko' ? p.pyokoHigh : p.crossyHigh
+                        score: mode === 'pyoko' ? p.pyokoHigh : mode === 'crossy' ? p.crossyHigh : (p.snakeHigh || 0)
                     }))
                     .filter(p => p.score > 0)
                     .sort((a, b) => b.score - a.score)
@@ -1548,12 +1789,16 @@
                             <div className="score">
                                 {gameMode === 'pyoko'
                                     ? `スコア: ${score}`
-                                    : `スコア: ${score} / 面: ${crossyLevel} / 合計: ${totalScore + score}`}
+                                    : gameMode === 'crossy'
+                                    ? `スコア: ${score} / 面: ${crossyLevel} / 合計: ${totalScore + score}`
+                                    : `スコア: ${score}点`}
                             </div>
                             <div className="high-score">
                                 {gameMode === 'pyoko'
                                     ? `ハイスコア: ${highScores.pyoko.name || '---'} ${highScores.pyoko.score}m`
-                                    : `ハイスコア: ${highScores.crossy.name || '---'} ${highScores.crossy.score}点`}
+                                    : gameMode === 'crossy'
+                                    ? `ハイスコア: ${highScores.crossy.name || '---'} ${highScores.crossy.score}点`
+                                    : `ハイスコア: ${highScores.snake.name || '---'} ${highScores.snake.score}点`}
                             </div>
                             <div className="controls-hint">
                                 {gameMode === 'pyoko' && (
@@ -1564,6 +1809,11 @@
                                     </>
                                 )}
                                 {gameMode === 'crossy' && (
+                                    <>
+                                        PC: 矢印キー / スマホ: 画面タップで方向移動
+                                    </>
+                                )}
+                                {gameMode === 'snake' && (
                                     <>
                                         PC: 矢印キー / スマホ: 画面タップで方向移動
                                     </>
@@ -1698,6 +1948,24 @@
                                     >
                                         🐥 クロッシーロード
                                     </button>
+                                    <button
+                                        className="btn secondary"
+                                        style={{background: '#4CAF50', boxShadow: '0 5px 0 #388E3C'}}
+                                        onTouchEnd={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setGameMode('snake');
+                                            setScore(0);
+                                            setGameState('start');
+                                        }}
+                                        onClick={() => {
+                                            setGameMode('snake');
+                                            setScore(0);
+                                            setGameState('start');
+                                        }}
+                                    >
+                                        🐍 スネークゲーム
+                                    </button>
                                 </div>
                             </div>
                         )}
@@ -1758,13 +2026,19 @@
 
                         {gameState === 'start' && (
                             <div className="message-box">
-                                <h1>{gameMode === 'pyoko' ? '🏠 お家へ帰ろう' : '🐥 クロッシーロード'}</h1>
+                                <h1>{gameMode === 'pyoko' ? '🏠 お家へ帰ろう' : gameMode === 'crossy' ? '🐥 クロッシーロード' : '🐍 スネークゲーム'}</h1>
                                 <p className="version">v1.0 React版</p>
                                 {gameMode === 'pyoko' && <p>ジャンプして6000m上のお家を目指そう！</p>}
                                 {gameMode === 'crossy' && (
                                     <p>
                                         車を避けて上へ進もう！<br/>
                                         現在の面: {crossyLevel} / 車速度 x{gameDataRef.current.crossy.speedMultiplier.toFixed(2)}
+                                    </p>
+                                )}
+                                {gameMode === 'snake' && (
+                                    <p>
+                                        りんご🍎を食べて蛇を長くしよう！<br/>
+                                        壁や自分にぶつからないように！
                                     </p>
                                 )}
                                 <button
@@ -1790,6 +2064,9 @@
                                         <p>面: {crossyLevel}</p>
                                         <p style={{fontSize: '20px', fontWeight: 'bold'}}>合計スコア: {totalScore + score}点</p>
                                     </>
+                                )}
+                                {gameMode === 'snake' && (
+                                    <p style={{fontSize: '20px', fontWeight: 'bold'}}>スコア: {score}点</p>
                                 )}
                                 {ranking.length > 0 ? (
                                     <div>
