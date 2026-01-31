@@ -294,7 +294,7 @@
                 if (!savedPlayers.some(p => p.name === lastName)) {
                     setPlayers(prev => [...prev, { name: lastName, pyokoHigh: 0, crossyHigh: 0 }]);
                 }
-                setGameState('menu');
+                setGameState('title');
             }, []);
 
             useEffect(() => {
@@ -1552,6 +1552,35 @@
                     )}
 
                     <div className="ui-overlay">
+                        {gameState === 'title' && (
+                            <div className="message-box" style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', border: 'none', padding: '50px 60px'}}>
+                                <h1 style={{fontSize: '48px', color: 'white', textShadow: '3px 3px 6px rgba(0,0,0,0.3)', marginBottom: '20px'}}>
+                                    🏠 お家へ帰ろう
+                                </h1>
+                                <p style={{color: 'rgba(255,255,255,0.9)', fontSize: '18px', marginBottom: '10px'}}>
+                                    🐶 🐦 👤
+                                </p>
+                                <p style={{color: 'rgba(255,255,255,0.8)', fontSize: '14px', marginBottom: '30px'}}>
+                                    ジャンプでお家を目指そう！
+                                </p>
+                                <button
+                                    className="btn"
+                                    style={{fontSize: '28px', padding: '20px 60px', background: '#FFD93D', color: '#333', boxShadow: '0 5px 0 #E6B800'}}
+                                    onTouchEnd={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setGameState('menu');
+                                    }}
+                                    onClick={() => setGameState('menu')}
+                                >
+                                    タップしてスタート
+                                </button>
+                                <p style={{color: 'rgba(255,255,255,0.6)', fontSize: '12px', marginTop: '20px'}}>
+                                    v1.0 © 2026
+                                </p>
+                            </div>
+                        )}
+
                         {gameState === 'name' && (
                             <div className="message-box">
                                 <h1>📝 名前登録</h1>
