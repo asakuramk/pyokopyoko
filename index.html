@@ -227,7 +227,7 @@
 
             // --- ここに移動 ---
             // 餌を配置
-            const spawnFood = () => {
+            function spawnFood() {
                 const data = gameDataRef.current;
                 const snake = data.snake;
                 const gridSize = snake.gridSize;
@@ -243,10 +243,10 @@
                 } while (snake.body.some(seg => seg.x === newFood.x && seg.y === newFood.y));
 
                 snake.food = newFood;
-            };
+            }
 
             // スネークゲーム初期化
-            const initSnake = () => {
+            function initSnake() {
                 const data = gameDataRef.current;
                 const snake = data.snake;
                 const gridSize = snake.gridSize;
@@ -269,7 +269,7 @@
 
                 // 餌の配置
                 spawnFood();
-            };
+            }
 
             const GRAVITY = 0.4;
             const JUMP_FORCE = -11.5;
