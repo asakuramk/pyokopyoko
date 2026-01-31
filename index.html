@@ -114,6 +114,19 @@
             border-radius: 25px;
             pointer-events: none;
         }
+        .high-score {
+            position: absolute;
+            top: 55px;
+            left: 15px;
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            background: rgba(0,0,0,0.25);
+            padding: 6px 16px;
+            border-radius: 20px;
+            pointer-events: none;
+        }
         .controls-hint {
             position: absolute;
             bottom: 20px;
@@ -136,6 +149,14 @@
             border-radius: 15px;
             pointer-events: none;
         }
+        .name-input {
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            border: 2px solid #FFD93D;
+            font-size: 16px;
+            margin-bottom: 12px;
+        }
     </style>
 </head>
 <body>
@@ -146,8 +167,12 @@
 
         function Game() {
             const canvasRef = useRef(null);
-            const [gameState, setGameState] = useState('menu');
+            const [gameState, setGameState] = useState('name');
             const [gameMode, setGameMode] = useState('pyoko');
+            const [playerName, setPlayerName] = useState('');
+            const [nameInput, setNameInput] = useState('');
+            const [highScores, setHighScores] = useState({ pyoko: 0, crossy: 0 });
+            const [crossyLevel, setCrossyLevel] = useState(1);
             const [score, setScore] = useState(0);
             const gameLoopRef = useRef(null);
             const gameDataRef = useRef({
@@ -167,7 +192,9 @@
                     cars: [],
                     laneHeight: 50,
                     laneCount: 8,
-                    score: 0
+                    score: 0,
+                    level: 1,
+                    speedMultiplier: 1
                 }
             });
 
@@ -187,6 +214,26 @@
                 }
                 return data.audioCtx;
             };
+
+            useEffect(() => {
+                const savedName = localStorage.getItem('playerName') || '';
+                const pyokoHigh = Number(localStorage.getItem('pyokoHighScore')) || 0;
+                const crossyHigh = Number(localStorage.getItem('crossyHighScore')) || 0;
+                setHighScores({ pyoko: pyokoHigh, crossy: crossyHigh });
+                if (savedName) {
+                    setPlayerName(savedName);
+                    setNameInput(savedName);
+                    setGameState('menu');
+                }
+            }, []);
+
+            useEffect(() => {
+                if (playerName) {
+                    localStorage.setItem('playerName', playerName);
+                }
+                localStorage.setItem('pyokoHighScore', String(highScores.pyoko || 0));
+                localStorage.setItem('crossyHighScore', String(highScores.crossy || 0));
+            }, [playerName, highScores]);
 
             useEffect(() => {
                 const canvas = canvasRef.current;
@@ -291,7 +338,7 @@
                     for (let i = 0; i < crossy.laneCount; i++) {
                         const y = canvas.height - (i + 2) * laneHeight;
                         const dir = i % 2 === 0 ? 1 : -1;
-                        const speed = 2 + i * 0.2 + Math.random();
+                        const speed = (2 + i * 0.2 + Math.random()) * crossy.speedMultiplier;
                         const carCount = 2 + (i % 2);
                         for (let c = 0; c < carCount; c++) {
                             crossy.cars.push({
@@ -384,6 +431,12 @@
                         if (currentCrossyScore > crossy.score) {
                             crossy.score = currentCrossyScore;
                             setScore(currentCrossyScore);
+                            setHighScores(prev => {
+                                if (currentCrossyScore > prev.crossy) {
+                                    return { ...prev, crossy: currentCrossyScore };
+                                }
+                                return prev;
+                            });
                         }
 
                         // ゴール
@@ -560,6 +613,12 @@
                     if (currentHeight > data.maxScore) {
                         data.maxScore = currentHeight;
                         setScore(currentHeight);
+                        setHighScores(prev => {
+                            if (currentHeight > prev.pyoko) {
+                                return { ...prev, pyoko: currentHeight };
+                            }
+                            return prev;
+                        });
                     }
 
                     // 1/3を超えたらミサイル機能有効
@@ -774,6 +833,17 @@
                 };
             }, [gameState]);
 
+            const handleNameSubmit = (e) => {
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                const trimmed = nameInput.trim();
+                if (!trimmed) return;
+                setPlayerName(trimmed);
+                setGameState('menu');
+            };
+
             const handleStart = (e) => {
                 if (e) {
                     e.preventDefault();
@@ -800,6 +870,28 @@
                 } else if (gameDataRef.current?.audioCtx?.state === 'suspended') {
                     gameDataRef.current.audioCtx.resume();
                 }
+                if (gameMode === 'crossy') {
+                    const data = gameDataRef.current;
+                    data.crossy.level = 1;
+                    data.crossy.speedMultiplier = 1;
+                    setCrossyLevel(1);
+                }
+                setScore(0);
+                setGameState('playing');
+            };
+
+            const handleNextLevel = (e) => {
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                if (typeof ensureAudio === 'function') {
+                    ensureAudio();
+                }
+                const data = gameDataRef.current;
+                data.crossy.level += 1;
+                data.crossy.speedMultiplier *= 1.2;
+                setCrossyLevel(data.crossy.level);
                 setScore(0);
                 setGameState('playing');
             };
@@ -817,11 +909,16 @@
                 <div className="game-container">
                     <canvas ref={canvasRef} />
 
-                    <div className="update-time">更新: {updateTime}</div>
+                    <div className="update-time">更新: {updateTime} / 名前: {playerName || '未登録'}</div>
 
                     {gameState === 'playing' && (
                         <>
-                            <div className="score">高さ: {score}m</div>
+                            <div className="score">
+                                {gameMode === 'pyoko' ? `高さ: ${score}m` : `スコア: ${score} / 面: ${crossyLevel}`}
+                            </div>
+                            <div className="high-score">
+                                {gameMode === 'pyoko' ? `ハイスコア: ${highScores.pyoko}m` : `ハイスコア: ${highScores.crossy}`}
+                            </div>
                             <div className="controls-hint">
                                 {gameMode === 'pyoko' && (
                                     <>
@@ -840,10 +937,35 @@
                     )}
 
                     <div className="ui-overlay">
+                        {gameState === 'name' && (
+                            <div className="message-box">
+                                <h1>📝 名前登録</h1>
+                                <p>ゲームを始める前に名前を入力してください。</p>
+                                <input
+                                    className="name-input"
+                                    type="text"
+                                    placeholder="名前"
+                                    value={nameInput}
+                                    onChange={(e) => setNameInput(e.target.value)}
+                                />
+                                <button
+                                    className="btn"
+                                    onTouchEnd={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleNameSubmit(e);
+                                    }}
+                                    onClick={handleNameSubmit}
+                                >
+                                    登録して進む
+                                </button>
+                            </div>
+                        )}
+
                         {gameState === 'menu' && (
                             <div className="message-box">
                                 <h1>🎮 ゲームを選んでね</h1>
-                                <p>遊びたいゲームを選択してください。</p>
+                                <p>{playerName ? `ようこそ、${playerName}さん！` : '遊びたいゲームを選択してください。'}</p>
                                 <div className="menu-buttons">
                                     <button
                                         className="btn"
@@ -868,11 +990,19 @@
                                             e.preventDefault();
                                             e.stopPropagation();
                                             setGameMode('crossy');
+                                            const data = gameDataRef.current;
+                                            data.crossy.level = 1;
+                                            data.crossy.speedMultiplier = 1;
+                                            setCrossyLevel(1);
                                             setScore(0);
                                             setGameState('start');
                                         }}
                                         onClick={() => {
                                             setGameMode('crossy');
+                                            const data = gameDataRef.current;
+                                            data.crossy.level = 1;
+                                            data.crossy.speedMultiplier = 1;
+                                            setCrossyLevel(1);
                                             setScore(0);
                                             setGameState('start');
                                         }}
@@ -888,7 +1018,12 @@
                                 <h1>{gameMode === 'pyoko' ? '🏠 お家へ帰ろう' : '🐥 クロッシーロード'}</h1>
                                 <p className="version">v1.0 React版</p>
                                 {gameMode === 'pyoko' && <p>ジャンプして6000m上のお家を目指そう！</p>}
-                                {gameMode === 'crossy' && <p>車を避けて上へ進もう！</p>}
+                                {gameMode === 'crossy' && (
+                                    <p>
+                                        車を避けて上へ進もう！<br/>
+                                        現在の面: {crossyLevel} / 車速度 x{gameDataRef.current.crossy.speedMultiplier.toFixed(2)}
+                                    </p>
+                                )}
                                 <button
                                     className="btn"
                                     onTouchEnd={(e) => {
@@ -906,7 +1041,8 @@
                         {gameState === 'gameover' && (
                             <div className="message-box">
                                 <h1 style={{color: '#FF6B6B'}}>ゲームオーバー</h1>
-                                <p>到達高さ: {score}m</p>
+                                {gameMode === 'pyoko' && <p>到達高さ: {score}m</p>}
+                                {gameMode === 'crossy' && <p>スコア: {score} / 面: {crossyLevel}</p>}
                                 <button
                                     className="btn"
                                     onTouchEnd={(e) => {
@@ -934,20 +1070,44 @@
 
                         {gameState === 'win' && (
                             <div className="message-box">
-                                <h1 style={{color: '#4ECDC4'}}>🎉 ただいまっ！</h1>
-                                <p>無事にお家に帰れました！</p>
-                                <p>到達高さ: {score}m</p>
-                                <button
-                                    className="btn"
-                                    onTouchEnd={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        handleRetry(e);
-                                    }}
-                                    onClick={handleRetry}
-                                >
-                                    また遊ぶ
-                                </button>
+                                <h1 style={{color: '#4ECDC4'}}>
+                                    {gameMode === 'pyoko' ? '🎉 ただいまっ！' : '🎉 面クリア！'}
+                                </h1>
+                                {gameMode === 'pyoko' && (
+                                    <>
+                                        <p>無事にお家に帰れました！</p>
+                                        <p>到達高さ: {score}m</p>
+                                    </>
+                                )}
+                                {gameMode === 'crossy' && (
+                                    <p>次の面は車が速くなります！</p>
+                                )}
+                                {gameMode === 'pyoko' && (
+                                    <button
+                                        className="btn"
+                                        onTouchEnd={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            handleRetry(e);
+                                        }}
+                                        onClick={handleRetry}
+                                    >
+                                        また遊ぶ
+                                    </button>
+                                )}
+                                {gameMode === 'crossy' && (
+                                    <button
+                                        className="btn"
+                                        onTouchEnd={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            handleNextLevel(e);
+                                        }}
+                                        onClick={handleNextLevel}
+                                    >
+                                        次の面へ
+                                    </button>
+                                )}
                                 <button
                                     className="btn secondary"
                                     onTouchEnd={(e) => {
