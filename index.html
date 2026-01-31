@@ -149,7 +149,9 @@
                 clouds: [],
                 birds: [],
                 poops: [],
-                audioCtx: null
+                missiles: [],
+                audioCtx: null,
+                superJumpActive: false
             });
 
             const GRAVITY = 0.4;
@@ -332,7 +334,7 @@
                             data.poops.push({
                                 x: bird.x + 10,
                                 y: bird.y + 10,
-                                vy: 2
+                                vy: 0.8  // 速度を遅くした（2.0 → 0.8）
                             });
                             bird.poopTimer = 150 + Math.random() * 100;
                         }
@@ -344,6 +346,28 @@
                         poop.vy += 0.2; // 重力
                     });
                     data.poops = data.poops.filter(poop => poop.y < data.camera.y + canvas.height + 100);
+
+                    // ミサイルの更新
+                    data.missiles.forEach(missile => {
+                        missile.y -= 8;
+                    });
+                    data.missiles = data.missiles.filter(missile => missile.y > -50);
+
+                    // ミサイルとうんちの衝突判定
+                    data.missiles.forEach((missile, mIndex) => {
+                        data.poops.forEach((poop, pIndex) => {
+                            if (
+                                missile.x > poop.x - 15 &&
+                                missile.x < poop.x + 15 &&
+                                missile.y > poop.y - 15 &&
+                                missile.y < poop.y + 15
+                            ) {
+                                playSound('hit');
+                                data.missiles.splice(mIndex, 1);
+                                data.poops.splice(pIndex, 1);
+                            }
+                        });
+                    });
 
                     // 鳥との衝突判定
                     data.birds.forEach(bird => {
@@ -383,7 +407,10 @@
                                 data.player.y + data.player.height < p.y + p.h + 10
                             ) {
                                 data.player.y = p.y - data.player.height;
-                                data.player.vy = JUMP_FORCE;
+                                // スーパージャンプの判定（2/3を超えたら）
+                                const jumpForce = data.superJumpActive ? JUMP_FORCE * 1.8 : JUMP_FORCE;
+                                data.player.vy = jumpForce;
+                                data.superJumpActive = false; // 1回限りなので解除
                                 playSound('jump');
 
                                 if (p.type === 'goal') {
@@ -405,6 +432,11 @@
                         data.maxScore = currentHeight;
                         setScore(currentHeight);
                     }
+
+                    // 1/3を超えたらミサイル機能有効
+                    const enableMissile = currentHeight > GOAL_HEIGHT / 3;
+                    // 2/3を超えたらスーパージャンプモード有効
+                    const enableSuperJump = currentHeight > GOAL_HEIGHT * 2 / 3;
 
                     // ゲームオーバー
                     if (data.player.y > data.camera.y + canvas.height + 100) {
@@ -465,6 +497,25 @@
                         }
                     });
 
+                    // ミサイル描画
+                    if (enableMissile) {
+                        data.missiles.forEach(missile => {
+                            const missileScreenY = missile.y - data.camera.y;
+                            if (missileScreenY > -20 && missileScreenY < canvas.height + 20) {
+                                ctx.fillStyle = '#FF4444';
+                                ctx.fillRect(missile.x - 2, missileScreenY - 8, 4, 16);
+                                // 炎
+                                ctx.fillStyle = '#FFA500';
+                                ctx.beginPath();
+                                ctx.moveTo(missile.x - 3, missileScreenY + 10);
+                                ctx.lineTo(missile.x + 3, missileScreenY + 10);
+                                ctx.lineTo(missile.x, missileScreenY + 15);
+                                ctx.closePath();
+                                ctx.fill();
+                            }
+                        });
+                    }
+
                     // 足場描画
                     data.platforms.forEach(p => {
                         const screenY = p.y - data.camera.y;
@@ -524,8 +575,25 @@
 
                 const handleKeyDown = (e) => {
                     const data = gameDataRef.current;
+                    if (gameState !== 'playing') return;
+
                     if (e.code === 'ArrowLeft') data.keys.left = true;
                     if (e.code === 'ArrowRight') data.keys.right = true;
+                    
+                    // スペースキーでミサイル発射
+                    if (e.code === 'Space' && data.maxScore > GOAL_HEIGHT / 3) {
+                        e.preventDefault();
+                        data.missiles.push({
+                            x: data.player.x + data.player.width / 2,
+                            y: data.player.y
+                        });
+                    }
+                    
+                    // Sキーでスーパージャンプ有効化
+                    if (e.code === 'KeyS' && data.maxScore > GOAL_HEIGHT * 2 / 3) {
+                        e.preventDefault();
+                        data.superJumpActive = true;
+                    }
                 };
 
                 const handleKeyUp = (e) => {
@@ -584,7 +652,9 @@
                         <>
                             <div className="score">高さ: {score}m</div>
                             <div className="controls-hint">
-                                PC: 矢印キー / スマホ: 画面左右タップ
+                                PC: 矢印キー / スマホ: 画面左右タップ<br/>
+                                {score > GOAL_HEIGHT / 3 && <span>Space: ミサイル発射 | </span>}
+                                {score > GOAL_HEIGHT * 2 / 3 && <span>S: スーパージャンプ</span>}
                             </div>
                         </>
                     )}
