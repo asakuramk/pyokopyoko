@@ -783,7 +783,7 @@
                                 ctx.beginPath();
                                 ctx.arc(splat.x, splat.y, splat.size, 0, Math.PI * 2);
                                 ctx.fill();
-                                
+
                                 // 飛び散った血のドロップ
                                 ctx.fillStyle = `rgba(180, 0, 0, ${splat.alpha * 0.7})`;
                                 for (let d = 0; d < 3; d++) {
@@ -794,7 +794,7 @@
                                     ctx.fill();
                                 }
                             });
-                            
+
                             // 画面全体を赤く染める
                             if (crossy.isDying) {
                                 const redOverlay = Math.min(0.5, (60 - crossy.deathTimer) / 60 * 0.5);
@@ -1633,6 +1633,11 @@
 
             // タッチ操作
             useEffect(() => {
+
+                // スワイプ用座標
+                let touchStartX = null;
+                let touchStartY = null;
+
                 const moveCrossy = (dx, dy) => {
                     const data = gameDataRef.current;
                     const crossy = data.crossy;
@@ -1642,8 +1647,13 @@
                 };
 
                 const handleTouchStart = (e) => {
+                    if (e.touches && e.touches.length > 0) {
+                        touchStartX = e.touches[0].clientX;
+                        touchStartY = e.touches[0].clientY;
+                    }
                     e.preventDefault();
                     if (gameState !== 'playing') return;
+                    // タップのみの即時方向転換（従来通り）
                     const touchX = e.touches[0].clientX;
                     const touchY = e.touches[0].clientY;
                     const data = gameDataRef.current;
@@ -1652,7 +1662,6 @@
                         const centerY = window.innerHeight / 2;
                         const dx = touchX < centerX ? -1 : 1;
                         const dy = touchY < centerY ? -1 : 1;
-                        // 斜めを避けるため、優先方向を決定
                         if (Math.abs(touchX - centerX) > Math.abs(touchY - centerY)) {
                             moveCrossy(dx, 0);
                         } else {
@@ -1660,34 +1669,14 @@
                         }
                         return;
                     }
-                    if (gameMode === 'snake') {
-                        const centerX = window.innerWidth / 2;
-                        const centerY = window.innerHeight / 2;
-                        const snake = data.snake;
-                        // タップ位置に応じて方向を決定
-                        if (Math.abs(touchX - centerX) > Math.abs(touchY - centerY)) {
-                            // 左右
-                            if (touchX < centerX && snake.direction !== 'right') {
-                                snake.nextDirection = 'left';
-                            } else if (touchX >= centerX && snake.direction !== 'left') {
-                                snake.nextDirection = 'right';
-                            }
+                    if (gameMode !== 'snake') {
+                        if (touchX < window.innerWidth / 2) {
+                            data.keys.left = true;
+                            data.keys.right = false;
                         } else {
-                            // 上下
-                            if (touchY < centerY && snake.direction !== 'down') {
-                                snake.nextDirection = 'up';
-                            } else if (touchY >= centerY && snake.direction !== 'up') {
-                                snake.nextDirection = 'down';
-                            }
+                            data.keys.right = true;
+                            data.keys.left = false;
                         }
-                        return;
-                    }
-                    if (touchX < window.innerWidth / 2) {
-                        data.keys.left = true;
-                        data.keys.right = false;
-                    } else {
-                        data.keys.right = true;
-                        data.keys.left = false;
                     }
                 };
 
@@ -1696,6 +1685,45 @@
                     const data = gameDataRef.current;
                     data.keys.left = false;
                     data.keys.right = false;
+
+                    // スワイプ方向判定
+                    if (gameState !== 'playing' || touchStartX === null || touchStartY === null) return;
+                    if (!e.changedTouches || e.changedTouches.length === 0) return;
+                    const endX = e.changedTouches[0].clientX;
+                    const endY = e.changedTouches[0].clientY;
+                    const dx = endX - touchStartX;
+                    const dy = endY - touchStartY;
+                    const absDx = Math.abs(dx);
+                    const absDy = Math.abs(dy);
+                    // スワイプ距離が一定以上の場合のみ判定
+                    if (absDx < 20 && absDy < 20) return;
+                    if (gameMode === 'snake') {
+                        const snake = data.snake;
+                        if (absDx > absDy) {
+                            // 横スワイプ
+                            if (dx < 0 && snake.direction !== 'right') {
+                                snake.nextDirection = 'left';
+                            } else if (dx > 0 && snake.direction !== 'left') {
+                                snake.nextDirection = 'right';
+                            }
+                        } else {
+                            // 縦スワイプ
+                            if (dy < 0 && snake.direction !== 'down') {
+                                snake.nextDirection = 'up';
+                            } else if (dy > 0 && snake.direction !== 'up') {
+                                snake.nextDirection = 'down';
+                            }
+                        }
+                    } else if (gameMode === 'crossy') {
+                        // クロッシーもスワイプで移動対応
+                        if (absDx > absDy) {
+                            moveCrossy(dx < 0 ? -1 : 1, 0);
+                        } else {
+                            moveCrossy(0, dy < 0 ? -1 : 1);
+                        }
+                    }
+                    touchStartX = null;
+                    touchStartY = null;
                 };
 
                 const handleKeyDown = (e) => {
