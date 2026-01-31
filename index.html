@@ -15,7 +15,7 @@
         }
         body {
             overflow: hidden;
-            background: linear-gradient(to bottom, #FFB6C1 0%, #FFC0CB 100%);
+            background: #FFB6D9;
             font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
             touch-action: none;
             user-select: none;
@@ -115,6 +115,18 @@
             text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
             pointer-events: none;
         }
+        .update-time {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            color: white;
+            font-size: 12px;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+            background: rgba(0,0,0,0.3);
+            padding: 5px 15px;
+            border-radius: 15px;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
@@ -206,7 +218,7 @@
                 // ゲームループ
                 const gameLoop = () => {
                     const data = gameDataRef.current;
-                    
+
                     // 更新
                     if (data.keys.left) data.player.vx = -MOVE_SPEED;
                     else if (data.keys.right) data.player.vx = MOVE_SPEED;
@@ -256,11 +268,8 @@
                         setGameState('gameover');
                     }
 
-                    // 描画
-                    const grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-                    grad.addColorStop(0, '#FFB6C1');
-                    grad.addColorStop(1, '#FFC0CB');
-                    ctx.fillStyle = grad;
+                    // 描画（ピンク背景）
+                    ctx.fillStyle = '#FFB6D9';
                     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
                     // 足場描画
@@ -276,7 +285,7 @@
                     const playerScreenY = data.player.y - data.camera.y;
                     ctx.fillStyle = '#FFD93D';
                     ctx.fillRect(data.player.x, playerScreenY, data.player.width, data.player.height);
-                    
+
                     // 顔
                     ctx.fillStyle = '#333';
                     const centerX = data.player.x + data.player.width / 2;
@@ -345,20 +354,39 @@
                 };
             }, [gameState]);
 
-            const handleStart = () => {
+            const handleStart = (e) => {
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
                 setScore(0);
                 setGameState('playing');
             };
 
-            const handleRetry = () => {
+            const handleRetry = (e) => {
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
                 setScore(0);
                 setGameState('playing');
             };
+
+            // 更新時刻を取得
+            const updateTime = new Date().toLocaleString('ja-JP', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
 
             return (
                 <div className="game-container">
                     <canvas ref={canvasRef} />
                     
+                    <div className="update-time">更新: {updateTime}</div>
+
                     {gameState === 'playing' && (
                         <>
                             <div className="score">高さ: {score}m</div>
@@ -374,7 +402,15 @@
                                 <h1>🏠 お家へ帰ろう</h1>
                                 <p className="version">v1.0 React版</p>
                                 <p>ジャンプして6000m上のお家を目指そう！</p>
-                                <button className="btn" onTouchStart={handleStart} onClick={handleStart}>
+                                <button 
+                                    className="btn" 
+                                    onTouchEnd={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleStart(e);
+                                    }}
+                                    onClick={handleStart}
+                                >
                                     スタート！
                                 </button>
                             </div>
@@ -384,7 +420,15 @@
                             <div className="message-box">
                                 <h1 style={{color: '#FF6B6B'}}>落ちちゃった...</h1>
                                 <p>到達高さ: {score}m</p>
-                                <button className="btn" onTouchStart={handleRetry} onClick={handleRetry}>
+                                <button 
+                                    className="btn" 
+                                    onTouchEnd={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleRetry(e);
+                                    }}
+                                    onClick={handleRetry}
+                                >
                                     もう一回！
                                 </button>
                             </div>
@@ -395,7 +439,15 @@
                                 <h1 style={{color: '#4ECDC4'}}>🎉 ただいまっ！</h1>
                                 <p>無事にお家に帰れました！</p>
                                 <p>到達高さ: {score}m</p>
-                                <button className="btn" onTouchStart={handleRetry} onClick={handleRetry}>
+                                <button 
+                                    className="btn" 
+                                    onTouchEnd={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleRetry(e);
+                                    }}
+                                    onClick={handleRetry}
+                                >
                                     また遊ぶ
                                 </button>
                             </div>
