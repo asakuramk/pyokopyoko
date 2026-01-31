@@ -225,6 +225,52 @@
                 }
             });
 
+            // --- ここに移動 ---
+            // 餌を配置
+            const spawnFood = () => {
+                const data = gameDataRef.current;
+                const snake = data.snake;
+                const gridSize = snake.gridSize;
+                const cols = Math.floor(window.innerWidth / gridSize);
+                const rows = Math.floor(window.innerHeight / gridSize);
+
+                let newFood;
+                do {
+                    newFood = {
+                        x: Math.floor(Math.random() * cols),
+                        y: Math.floor(Math.random() * rows)
+                    };
+                } while (snake.body.some(seg => seg.x === newFood.x && seg.y === newFood.y));
+
+                snake.food = newFood;
+            };
+
+            // スネークゲーム初期化
+            const initSnake = () => {
+                const data = gameDataRef.current;
+                const snake = data.snake;
+                const gridSize = snake.gridSize;
+                const cols = Math.floor(window.innerWidth / gridSize);
+                const rows = Math.floor(window.innerHeight / gridSize);
+
+                // 蛇の初期位置（中央付近）
+                const startX = Math.floor(cols / 2);
+                const startY = Math.floor(rows / 2);
+                snake.body = [
+                    { x: startX, y: startY },
+                    { x: startX - 1, y: startY },
+                    { x: startX - 2, y: startY }
+                ];
+                snake.direction = 'right';
+                snake.nextDirection = 'right';
+                snake.score = 0;
+                snake.speed = 150;
+                snake.lastMove = Date.now();
+
+                // 餌の配置
+                spawnFood();
+            };
+
             const GRAVITY = 0.4;
             const JUMP_FORCE = -11.5;
             const MOVE_SPEED = 5.5;
