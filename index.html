@@ -184,6 +184,8 @@
             const [highScoreMessage, setHighScoreMessage] = useState('');
             const gameLoopRef = useRef(null);
             const autoNextTimerRef = useRef(null);
+            const getPlayerSize = (charType) => charType === 'human' ? 68 : 34;
+            const getCrossyPlayerSize = (charType) => charType === 'human' ? 48 : 24;
             const gameDataRef = useRef({
                 player: { x: 0, y: 0, vx: 0, vy: 0, width: 34, height: 34, state: 'jumping', animFrame: 0 },
                 platforms: [],
@@ -611,15 +613,15 @@
                             const ch = car.h;
                             const isRight = car.vx > 0;
                             const bodyColor = isRight ? '#E82127' : '#1565C0'; // テスラレッド or ディープブルー
-                            
+
                             ctx.save();
-                            
+
                             // 車体のシャドウ
                             ctx.fillStyle = 'rgba(0,0,0,0.3)';
                             ctx.beginPath();
                             ctx.ellipse(cx + cw/2 + 2, cy + ch/2 + 2, cw/2 + 2, ch/2 + 1, 0, 0, Math.PI * 2);
                             ctx.fill();
-                            
+
                             // メインボディ（流線型のテスラシルエット）
                             ctx.fillStyle = bodyColor;
                             ctx.beginPath();
@@ -633,7 +635,7 @@
                             ctx.quadraticCurveTo(cx, cy + ch * 0.7, cx + cw * 0.05, cy + ch * 0.5);
                             ctx.closePath();
                             ctx.fill();
-                            
+
                             // ボディのハイライト（光沢感）
                             const gradient = ctx.createLinearGradient(cx, cy, cx, cy + ch);
                             gradient.addColorStop(0, 'rgba(255,255,255,0.3)');
@@ -641,7 +643,7 @@
                             gradient.addColorStop(1, 'rgba(0,0,0,0.2)');
                             ctx.fillStyle = gradient;
                             ctx.fill();
-                            
+
                             // ガラスルーフ（テスラ特有の大きなガラス）
                             ctx.fillStyle = '#1a1a2e';
                             ctx.beginPath();
@@ -652,7 +654,7 @@
                             ctx.quadraticCurveTo(cx + cw * 0.15, cy + ch * 0.5, cx + cw * 0.2, cy + ch * 0.25);
                             ctx.closePath();
                             ctx.fill();
-                            
+
                             // ガラスの反射
                             ctx.fillStyle = 'rgba(135,206,235,0.3)';
                             ctx.beginPath();
@@ -662,28 +664,28 @@
                             ctx.lineTo(cx + cw * 0.25, cy + ch * 0.45);
                             ctx.closePath();
                             ctx.fill();
-                            
+
                             // ヘッドライト（LED風）
                             ctx.fillStyle = '#FFFFFF';
                             ctx.beginPath();
                             ctx.ellipse(cx + cw * 0.08, cy + ch * 0.35, 2, 1.5, 0, 0, Math.PI * 2);
                             ctx.ellipse(cx + cw * 0.08, cy + ch * 0.65, 2, 1.5, 0, 0, Math.PI * 2);
                             ctx.fill();
-                            
+
                             // テールライト（テスラ特有の横長LED）
                             ctx.fillStyle = '#FF3333';
                             ctx.beginPath();
                             ctx.roundRect(cx + cw * 0.88, cy + ch * 0.3, 3, ch * 0.15, 1);
                             ctx.roundRect(cx + cw * 0.88, cy + ch * 0.55, 3, ch * 0.15, 1);
                             ctx.fill();
-                            
+
                             // Teslaロゴ（Tマーク）
                             ctx.fillStyle = '#C0C0C0';
                             ctx.font = 'bold 8px Arial';
                             ctx.textAlign = 'center';
                             ctx.textBaseline = 'middle';
                             ctx.fillText('T', cx + cw * 0.5, cy + ch * 0.5);
-                            
+
                             // ホイール（アエロホイール風）
                             ctx.fillStyle = '#333';
                             ctx.beginPath();
@@ -692,7 +694,7 @@
                             ctx.arc(cx + cw * 0.75, cy + ch * 0.15, 3, 0, Math.PI * 2);
                             ctx.arc(cx + cw * 0.75, cy + ch * 0.85, 3, 0, Math.PI * 2);
                             ctx.fill();
-                            
+
                             // ホイールのハブキャップ
                             ctx.fillStyle = '#666';
                             ctx.beginPath();
@@ -701,7 +703,7 @@
                             ctx.arc(cx + cw * 0.75, cy + ch * 0.15, 1.5, 0, Math.PI * 2);
                             ctx.arc(cx + cw * 0.75, cy + ch * 0.85, 1.5, 0, Math.PI * 2);
                             ctx.fill();
-                            
+
                             ctx.restore();
                         });
 
@@ -716,9 +718,13 @@
                         });
 
                         // プレイヤー描画（選択したキャラクタータイプに応じて描画）
-                        const px = crossy.player.x;
-                        const py = crossy.player.y;
-                        const pSize = crossy.player.size;
+                        const basePx = crossy.player.x;
+                        const basePy = crossy.player.y;
+                        const baseSize = crossy.player.size;
+                        // 人間は2倍のサイズで描画
+                        const pSize = characterType === 'human' ? baseSize * 2 : baseSize;
+                        const px = basePx - (pSize - baseSize) / 2;
+                        const py = basePy - (pSize - baseSize);
                         const centerX = px + pSize / 2;
                         const animFrame = Date.now() / 50;
 
@@ -1086,7 +1092,19 @@
 
                     // プレイヤー描画関数（キャラクタータイプに応じて描画）
                     const drawPlayer = (x, y, state, animFrame, charType) => {
-                        const centerX = x + data.player.width / 2;
+                        // 人間は2倍サイズ
+                        const scale = charType === 'human' ? 2 : 1;
+                        const baseWidth = data.player.width;
+                        
+                        ctx.save();
+                        // スケーリングの中心を設定
+                        const pivotX = x + baseWidth / 2;
+                        const pivotY = y + baseWidth;
+                        ctx.translate(pivotX, pivotY);
+                        ctx.scale(scale, scale);
+                        ctx.translate(-pivotX, -pivotY);
+                        
+                        const centerX = x + baseWidth / 2;
                         const screenY = y;
 
                         if (charType === 'human') {
@@ -1125,10 +1143,12 @@
                                 ctx.moveTo(x + 20, screenY + 28);
                                 ctx.lineTo(x + 20, screenY + 32);
                                 ctx.stroke();
+                                ctx.restore();
                                 ctx.fillStyle = '#FF6B6B';
                                 ctx.font = 'bold 16px sans-serif';
                                 ctx.textAlign = 'center';
-                                ctx.fillText('やったー！', centerX, screenY - 10);
+                                ctx.fillText('やったー！', pivotX, pivotY - baseWidth * scale - 10);
+                                return;
                             } else if (state === 'falling') {
                                 ctx.fillStyle = '#FF9800';
                                 ctx.fillRect(x + 10, screenY + 12, 14, 16);
@@ -1290,6 +1310,7 @@
                             ctx.fillRect(x + 15, screenY + 28, 3, 6);
                             ctx.fillRect(x + 20, screenY + 28, 3, 6);
                         }
+                        ctx.restore();
                     };
 
                     const playerScreenY = data.player.y - data.camera.y;
