@@ -92,6 +92,15 @@
             transform: translateY(5px);
             box-shadow: 0 0 0 #D64545;
         }
+        .menu-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .btn.secondary {
+            background: #4FC3F7;
+            box-shadow: 0 5px 0 #0288D1;
+        }
         .score {
             position: absolute;
             top: 15px;
@@ -137,7 +146,8 @@
 
         function Game() {
             const canvasRef = useRef(null);
-            const [gameState, setGameState] = useState('start');
+            const [gameState, setGameState] = useState('menu');
+            const [gameMode, setGameMode] = useState('pyoko');
             const [score, setScore] = useState(0);
             const gameLoopRef = useRef(null);
             const gameDataRef = useRef({
@@ -151,13 +161,32 @@
                 poops: [],
                 missiles: [],
                 audioCtx: null,
-                superJumpActive: false
+                superJumpActive: false,
+                crossy: {
+                    player: { x: 0, y: 0, size: 24 },
+                    cars: [],
+                    laneHeight: 50,
+                    laneCount: 8,
+                    score: 0
+                }
             });
 
             const GRAVITY = 0.4;
             const JUMP_FORCE = -11.5;
             const MOVE_SPEED = 5.5;
             const GOAL_HEIGHT = 6000;
+
+            // 音の準備（ユーザー操作で再開）
+            const ensureAudio = () => {
+                const data = gameDataRef.current;
+                if (!data.audioCtx) {
+                    data.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (data.audioCtx.state === 'suspended') {
+                    data.audioCtx.resume();
+                }
+                return data.audioCtx;
+            };
 
             useEffect(() => {
                 const canvas = canvasRef.current;
@@ -179,7 +208,7 @@
                 const canvas = canvasRef.current;
                 const ctx = canvas.getContext('2d');
 
-                // ゲーム初期化
+                // ぴょこぴょこ初期化
                 const initGame = () => {
                     const data = gameDataRef.current;
                     data.player.x = canvas.width / 2 - 17;
@@ -189,12 +218,9 @@
                     data.camera.y = 0;
                     data.maxScore = 0;
 
-                    // 音の初期化
+                    // 音の準備（実際の再開はユーザー操作時に行う）
                     if (!data.audioCtx) {
                         data.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                    }
-                    if (data.audioCtx.state === 'suspended') {
-                        data.audioCtx.resume();
                     }
 
                     // 雲の初期化
@@ -208,15 +234,15 @@
                         });
                     }
 
-                    // 鳥の初期化
+                    // 鳥の初期化（画面付近に出現）
                     data.birds = [];
                     for (let i = 0; i < 5; i++) {
                         data.birds.push({
                             x: Math.random() * canvas.width,
-                            y: -1000 - Math.random() * (GOAL_HEIGHT - 1000),
+                            y: data.camera.y - 200 - Math.random() * 600,
                             vx: (Math.random() < 0.5 ? -1 : 1) * (1.5 + Math.random()),
                             size: 20,
-                            poopTimer: Math.random() * 200
+                            poopTimer: 30 + Math.random() * 120
                         });
                     }
 
@@ -253,11 +279,41 @@
                     });
                 };
 
-                initGame();
+                // クロッシーロード初期化
+                const initCrossy = () => {
+                    const data = gameDataRef.current;
+                    const crossy = data.crossy;
+                    crossy.player.x = canvas.width / 2 - crossy.player.size / 2;
+                    crossy.player.y = canvas.height - 60;
+                    crossy.cars = [];
+                    crossy.score = 0;
+                    const laneHeight = crossy.laneHeight;
+                    for (let i = 0; i < crossy.laneCount; i++) {
+                        const y = canvas.height - (i + 2) * laneHeight;
+                        const dir = i % 2 === 0 ? 1 : -1;
+                        const speed = 2 + i * 0.2 + Math.random();
+                        const carCount = 2 + (i % 2);
+                        for (let c = 0; c < carCount; c++) {
+                            crossy.cars.push({
+                                x: Math.random() * canvas.width,
+                                y,
+                                w: 40,
+                                h: 20,
+                                vx: dir * speed
+                            });
+                        }
+                    }
+                };
+
+                if (gameMode === 'pyoko') {
+                    initGame();
+                } else {
+                    initCrossy();
+                }
 
                 // 音を鳴らす関数
                 const playSound = (type) => {
-                    const audioCtx = gameDataRef.current.audioCtx;
+                    const audioCtx = ensureAudio();
                     if (!audioCtx) return;
 
                     const osc = audioCtx.createOscillator();
@@ -300,6 +356,73 @@
                 const gameLoop = () => {
                     const data = gameDataRef.current;
 
+                    if (gameMode === 'crossy') {
+                        const crossy = data.crossy;
+
+                        // 車の更新
+                        crossy.cars.forEach(car => {
+                            car.x += car.vx;
+                            if (car.vx > 0 && car.x > canvas.width + 60) car.x = -60;
+                            if (car.vx < 0 && car.x < -60) car.x = canvas.width + 60;
+                        });
+
+                        // 衝突判定
+                        crossy.cars.forEach(car => {
+                            if (
+                                crossy.player.x + crossy.player.size > car.x &&
+                                crossy.player.x < car.x + car.w &&
+                                crossy.player.y + crossy.player.size > car.y &&
+                                crossy.player.y < car.y + car.h
+                            ) {
+                                playSound('hit');
+                                setGameState('gameover');
+                            }
+                        });
+
+                        // スコア
+                        const currentCrossyScore = Math.max(0, Math.floor((canvas.height - crossy.player.y) / 10));
+                        if (currentCrossyScore > crossy.score) {
+                            crossy.score = currentCrossyScore;
+                            setScore(currentCrossyScore);
+                        }
+
+                        // ゴール
+                        if (crossy.player.y < 20) {
+                            setGameState('win');
+                        }
+
+                        // 描画
+                        ctx.fillStyle = '#87CEEB';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                        // 道と草
+                        const laneHeight = crossy.laneHeight;
+                        for (let i = 0; i < crossy.laneCount + 2; i++) {
+                            const y = canvas.height - (i + 1) * laneHeight;
+                            ctx.fillStyle = i % 2 === 0 ? '#9CCC65' : '#616161';
+                            ctx.fillRect(0, y, canvas.width, laneHeight);
+                        }
+
+                        // 車描画
+                        crossy.cars.forEach(car => {
+                            ctx.fillStyle = '#FF7043';
+                            ctx.fillRect(car.x, car.y, car.w, car.h);
+                            ctx.fillStyle = '#212121';
+                            ctx.fillRect(car.x + 5, car.y + 4, 8, 6);
+                            ctx.fillRect(car.x + car.w - 13, car.y + 4, 8, 6);
+                        });
+
+                        // プレイヤー描画
+                        ctx.fillStyle = '#FFD93D';
+                        ctx.fillRect(crossy.player.x, crossy.player.y, crossy.player.size, crossy.player.size);
+                        ctx.fillStyle = '#333';
+                        ctx.fillRect(crossy.player.x + 6, crossy.player.y + 6, 4, 4);
+                        ctx.fillRect(crossy.player.x + crossy.player.size - 10, crossy.player.y + 6, 4, 4);
+
+                        gameLoopRef.current = requestAnimationFrame(gameLoop);
+                        return;
+                    }
+
                     // 更新
                     if (data.keys.left) data.player.vx = -MOVE_SPEED;
                     else if (data.keys.right) data.player.vx = MOVE_SPEED;
@@ -326,6 +449,12 @@
                         bird.x += bird.vx;
                         if (bird.x < -50 || bird.x > canvas.width + 50) {
                             bird.vx *= -1;
+                        }
+
+                        // 画面外に落ちた鳥は上に再配置
+                        if (bird.y - data.camera.y > canvas.height + 200) {
+                            bird.y = data.camera.y - 200 - Math.random() * 600;
+                            bird.poopTimer = 30 + Math.random() * 120;
                         }
 
                         // うんちを落とす
@@ -472,7 +601,7 @@
                             ctx.beginPath();
                             ctx.arc(bird.x + 10, birdY + 10, 8, 0, Math.PI * 2);
                             ctx.fill();
-                            
+
                             // 翼
                             ctx.strokeStyle = '#8B4513';
                             ctx.lineWidth = 3;
@@ -552,11 +681,33 @@
 
             // タッチ操作
             useEffect(() => {
+                const moveCrossy = (dx, dy) => {
+                    const data = gameDataRef.current;
+                    const crossy = data.crossy;
+                    const step = crossy.laneHeight / 1.5;
+                    crossy.player.x = Math.max(0, Math.min(window.innerWidth - crossy.player.size, crossy.player.x + dx * step));
+                    crossy.player.y = Math.max(0, Math.min(window.innerHeight - crossy.player.size, crossy.player.y + dy * step));
+                };
+
                 const handleTouchStart = (e) => {
                     if (gameState !== 'playing') return;
                     e.preventDefault();
                     const touchX = e.touches[0].clientX;
+                    const touchY = e.touches[0].clientY;
                     const data = gameDataRef.current;
+                    if (gameMode === 'crossy') {
+                        const centerX = window.innerWidth / 2;
+                        const centerY = window.innerHeight / 2;
+                        const dx = touchX < centerX ? -1 : 1;
+                        const dy = touchY < centerY ? -1 : 1;
+                        // 斜めを避けるため、優先方向を決定
+                        if (Math.abs(touchX - centerX) > Math.abs(touchY - centerY)) {
+                            moveCrossy(dx, 0);
+                        } else {
+                            moveCrossy(0, dy);
+                        }
+                        return;
+                    }
                     if (touchX < window.innerWidth / 2) {
                         data.keys.left = true;
                         data.keys.right = false;
@@ -577,9 +728,17 @@
                     const data = gameDataRef.current;
                     if (gameState !== 'playing') return;
 
+                    if (gameMode === 'crossy') {
+                        if (e.code === 'ArrowUp') moveCrossy(0, -1);
+                        if (e.code === 'ArrowDown') moveCrossy(0, 1);
+                        if (e.code === 'ArrowLeft') moveCrossy(-1, 0);
+                        if (e.code === 'ArrowRight') moveCrossy(1, 0);
+                        return;
+                    }
+
                     if (e.code === 'ArrowLeft') data.keys.left = true;
                     if (e.code === 'ArrowRight') data.keys.right = true;
-                    
+
                     // スペースキーでミサイル発射
                     if (e.code === 'Space' && data.maxScore > GOAL_HEIGHT / 3) {
                         e.preventDefault();
@@ -588,7 +747,7 @@
                             y: data.player.y
                         });
                     }
-                    
+
                     // Sキーでスーパージャンプ有効化
                     if (e.code === 'KeyS' && data.maxScore > GOAL_HEIGHT * 2 / 3) {
                         e.preventDefault();
@@ -620,6 +779,12 @@
                     e.preventDefault();
                     e.stopPropagation();
                 }
+                // iPhoneでの音再生を確実にする
+                if (typeof ensureAudio === 'function') {
+                    ensureAudio();
+                } else if (gameDataRef.current?.audioCtx?.state === 'suspended') {
+                    gameDataRef.current.audioCtx.resume();
+                }
                 setScore(0);
                 setGameState('playing');
             };
@@ -628,6 +793,12 @@
                 if (e) {
                     e.preventDefault();
                     e.stopPropagation();
+                }
+                // iPhoneでの音再生を確実にする
+                if (typeof ensureAudio === 'function') {
+                    ensureAudio();
+                } else if (gameDataRef.current?.audioCtx?.state === 'suspended') {
+                    gameDataRef.current.audioCtx.resume();
                 }
                 setScore(0);
                 setGameState('playing');
@@ -652,19 +823,72 @@
                         <>
                             <div className="score">高さ: {score}m</div>
                             <div className="controls-hint">
-                                PC: 矢印キー / スマホ: 画面左右タップ<br/>
-                                {score > GOAL_HEIGHT / 3 && <span>Space: ミサイル発射 | </span>}
-                                {score > GOAL_HEIGHT * 2 / 3 && <span>S: スーパージャンプ</span>}
+                                {gameMode === 'pyoko' && (
+                                    <>
+                                        PC: 矢印キー / スマホ: 画面左右タップ<br/>
+                                        {score > GOAL_HEIGHT / 3 && <span>Space: ミサイル発射 | </span>}
+                                        {score > GOAL_HEIGHT * 2 / 3 && <span>S: スーパージャンプ</span>}
+                                    </>
+                                )}
+                                {gameMode === 'crossy' && (
+                                    <>
+                                        PC: 矢印キー / スマホ: 画面タップで方向移動
+                                    </>
+                                )}
                             </div>
                         </>
                     )}
 
                     <div className="ui-overlay">
+                        {gameState === 'menu' && (
+                            <div className="message-box">
+                                <h1>🎮 ゲームを選んでね</h1>
+                                <p>遊びたいゲームを選択してください。</p>
+                                <div className="menu-buttons">
+                                    <button
+                                        className="btn"
+                                        onTouchEnd={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setGameMode('pyoko');
+                                            setScore(0);
+                                            setGameState('start');
+                                        }}
+                                        onClick={() => {
+                                            setGameMode('pyoko');
+                                            setScore(0);
+                                            setGameState('start');
+                                        }}
+                                    >
+                                        🏠 お家へ帰ろう
+                                    </button>
+                                    <button
+                                        className="btn secondary"
+                                        onTouchEnd={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setGameMode('crossy');
+                                            setScore(0);
+                                            setGameState('start');
+                                        }}
+                                        onClick={() => {
+                                            setGameMode('crossy');
+                                            setScore(0);
+                                            setGameState('start');
+                                        }}
+                                    >
+                                        🐥 クロッシーロード
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         {gameState === 'start' && (
                             <div className="message-box">
-                                <h1>🏠 お家へ帰ろう</h1>
+                                <h1>{gameMode === 'pyoko' ? '🏠 お家へ帰ろう' : '🐥 クロッシーロード'}</h1>
                                 <p className="version">v1.0 React版</p>
-                                <p>ジャンプして6000m上のお家を目指そう！</p>
+                                {gameMode === 'pyoko' && <p>ジャンプして6000m上のお家を目指そう！</p>}
+                                {gameMode === 'crossy' && <p>車を避けて上へ進もう！</p>}
                                 <button
                                     className="btn"
                                     onTouchEnd={(e) => {
@@ -681,7 +905,7 @@
 
                         {gameState === 'gameover' && (
                             <div className="message-box">
-                                <h1 style={{color: '#FF6B6B'}}>落ちちゃった...</h1>
+                                <h1 style={{color: '#FF6B6B'}}>ゲームオーバー</h1>
                                 <p>到達高さ: {score}m</p>
                                 <button
                                     className="btn"
@@ -693,6 +917,17 @@
                                     onClick={handleRetry}
                                 >
                                     もう一回！
+                                </button>
+                                <button
+                                    className="btn secondary"
+                                    onTouchEnd={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setGameState('menu');
+                                    }}
+                                    onClick={() => setGameState('menu')}
+                                >
+                                    ゲーム選択へ
                                 </button>
                             </div>
                         )}
@@ -712,6 +947,17 @@
                                     onClick={handleRetry}
                                 >
                                     また遊ぶ
+                                </button>
+                                <button
+                                    className="btn secondary"
+                                    onTouchEnd={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setGameState('menu');
+                                    }}
+                                    onClick={() => setGameState('menu')}
+                                >
+                                    ゲーム選択へ
                                 </button>
                             </div>
                         )}
