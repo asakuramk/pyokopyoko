@@ -180,6 +180,7 @@
             });
             const [crossyLevel, setCrossyLevel] = useState(1);
             const [score, setScore] = useState(0);
+            const [lives, setLives] = useState(3);
             const [totalScore, setTotalScore] = useState(0);
             const [isNewHighScore, setIsNewHighScore] = useState(false);
             const [highScoreMessage, setHighScoreMessage] = useState('');
@@ -658,16 +659,35 @@
                             // 壁との衝突判定
                             if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows) {
                                 playSound('hit');
-                                updatePlayerScore('snake', snake.score);
-                                setGameState('gameover');
+                                            // ライフが残っていればライフを減らしてスネークをリセット
+                                            setLives(prev => {
+                                                if (prev > 1) {
+                                                    // スコアは保持して再開
+                                                    initSnake();
+                                                    return prev - 1;
+                                                } else {
+                                                    updatePlayerScore('snake', snake.score);
+                                                    setGameState('gameover');
+                                                    return 0;
+                                                }
+                                            });
                                 return;
                             }
 
                             // 自分自身との衝突判定
                             if (snake.body.some(seg => seg.x === head.x && seg.y === head.y)) {
                                 playSound('hit');
-                                updatePlayerScore('snake', snake.score);
-                                setGameState('gameover');
+                                // ライフを消費してリトライ or ゲームオーバー
+                                setLives(prev => {
+                                    if (prev > 1) {
+                                        initSnake();
+                                        return prev - 1;
+                                    } else {
+                                        updatePlayerScore('snake', snake.score);
+                                        setGameState('gameover');
+                                        return 0;
+                                    }
+                                });
                                 return;
                             }
 
@@ -1872,6 +1892,7 @@
                     gameDataRef.current.audioCtx.resume();
                 }
                 setScore(0);
+                setLives(3);
                 setGameState('playing');
             };
 
@@ -1893,6 +1914,7 @@
                     setCrossyLevel(1);
                 }
                 setScore(0);
+                setLives(3);
                 setGameState('playing');
             };
 
@@ -1967,6 +1989,9 @@
                                     : gameMode === 'crossy'
                                     ? `スコア: ${score} / 面: ${crossyLevel} / 合計: ${totalScore + score}`
                                     : `スコア: ${score}点`}
+                            </div>
+                            <div className="score" style={{top: '55px', left: 'auto', right: '15px', background: 'rgba(0,0,0,0.3)'}}>
+                                {gameMode === 'snake' ? `ライフ: ${lives}` : ''}
                             </div>
                             <div className="high-score">
                                 {gameMode === 'pyoko'
